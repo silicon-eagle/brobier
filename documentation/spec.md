@@ -23,13 +23,14 @@
 
 ## 1. Project Overview
 
-Brobier is a private, self-hosted web application that runs an advent-calendar-style beer discovery experience. Approved participants can log in without a password, submit beer entries, view a leaderboard, and open calendar doors that reveal a new beer each day. Admin users manage participants and curate the calendar.
+Brobier is a private, self-hosted web application that runs an advent-calendar-style beer discovery experience. Approved participants can log in without a password, submit beer entries, view a leaderboard, and open calendar doors that reveal a new beer each day. The calendar runs as a yearly edition (24 doors per year), and prior years remain available as history. Admin users manage participants and curate each year of the calendar.
 
 ### Goals
 
 - Simple to run locally with a single command: `docker compose up --build`
 - All business rules enforced server-side
 - No public registration; all users are created by admins
+- Preserve calendar history across years (no overwriting or deleting prior yearly editions during normal yearly setup)
 
 ---
 
@@ -53,7 +54,7 @@ Brobier is a private, self-hosted web application that runs an advent-calendar-s
 | API client | Typed fetch wrapper (hand-rolled, no codegen) |
 | Containerisation | Docker + Docker Compose v2 |
 | Reverse proxy | Nginx (Alpine) |
-| Testing | pytest + pytest-asyncio |
+| Testing | pytest + pytest-asyncio (backend), Vitest + React Testing Library (frontend) |
 | Linting / formatting | Ruff |
 | Type checking | ty |
 | Local email | Mailpit |
@@ -91,7 +92,7 @@ All user-facing traffic enters through `nginx` on port 80. The `backend` and `fr
 ### Backend Dockerfile (development)
 
 - Base: `python:3.14-slim`
-- Install dependencies with `uv` or `pip` from `requirements.txt`.
+- Install dependencies with `uv sync --frozen` using `pyproject.toml` and `uv.lock`.
 - Run with `uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`.
 - On startup, run `init_db.py` to create tables and seed data if the database is empty.
 
@@ -155,7 +156,7 @@ server {
 
 ```
 # Database
-DATABASE_URL=postgresql+psycopg2://brobier:brobier@db:5432/brobier
+DATABASE_URL=postgresql+psycopg://brobier:brobier@db:5432/brobier
 
 # Session
 SESSION_COOKIE_NAME=brobier_session
@@ -254,8 +255,10 @@ All models use SQLModel. Table creation runs at startup via `SQLModel.metadata.c
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | `UUID` | PK, default `uuid4` |
-| `day` | `int` | unique, not null, check 1 ≤ day ≤ 24 |
+| `year` | `int` | not null, indexed, check year ≥ 2020 |
+| `day` | `int` | not null, check 1 ≤ day ≤ 24 |
 | `unlock_date` | `datetime` | not null |
+| `published_at` | `datetime` | nullable |
 | `title` | `str` | not null |
 | `content` | `str` | not null |
 | `image_url` | `str` | nullable |
@@ -263,13 +266,53 @@ All models use SQLModel. Table creation runs at startup via `SQLModel.metadata.c
 | `created_at` | `datetime` | not null, default `utcnow` |
 | `updated_at` | `datetime` | not null, updated on save |
 
+- Composite uniqueness constraint on (`year`, `day`) so each year has exactly one entry per day.
+- Historical rows are immutable by year boundaries: creating a new year must not delete prior years.
+
 ### Relationships summary
 
 ```
-User ──< BeerEntry
-User ──< LoginCode
-User ──< Session
-BeerEntry >──o CalendarEntry
+DATABASE RELATIONSHIP DIAGRAM (ASCII)
+
+    +------------------------+             1 ---- *             +------------------------+
+    |          User          |--------------------------------->|       BeerEntry        |
+    |------------------------|                                  |------------------------|
+    | PK id (UUID)           |<---------------------------------| PK id (UUID)           |
+    | email (UNIQUE, INDEX)  |          * ---- 1               | FK user_id -> User.id  |
+    | display_name           |                                  | beer_name_encrypted    |
+    | role, is_active        |<---------------------------------| brewery_encrypted      |
+    | created_at, updated_at |          * ---- 1               | untappd_url_encrypted? |
+    +------------------------+                                  | comment_encrypted?     |
+              ^                                                 | rating                 |
+              | * ---- 1                                        | created_at, updated_at |
+              |                                                 +------------------------+
+    +------------------------+                                             |
+    |       LoginCode        |                                             | 0..1 ---- 0..1
+    |------------------------|                                             v
+    | PK id (UUID)           |                                  +------------------------+
+    | FK user_id -> User.id  |                                  |     CalendarEntry      |
+    | code_hash              |                                  |------------------------|
+    | expires_at, used_at    |                                  | PK id (UUID)           |
+    | created_at             |                                  | year, day              |
+    +------------------------+                                  | unlock_date            |
+                                                                | published_at?          |
+    +------------------------+                                  | title, content         |
+    |        Session         |                                  | image_url?             |
+    |------------------------|                                  | FK beer_entry_id?      |
+    | PK id (UUID)           |                                  | UNIQUE(year, day)      |
+    | FK user_id -> User.id  |                                  | UNIQUE(beer_entry_id)  |
+    | session_token_hash     |                                  | created_at, updated_at |
+    | expires_at, revoked_at |                                  +------------------------+
+    | created_at, last_seen  |
+    +------------------------+
+
+    FK mapping
+    - BeerEntry.user_id -> User.id
+    - LoginCode.user_id -> User.id
+    - Session.user_id -> User.id
+    - CalendarEntry.beer_entry_id -> BeerEntry.id
+
+    * encrypted fields in BeerEntry: beer_name, brewery, untappd_url, comment
 ```
 
 ---
@@ -305,7 +348,7 @@ def decrypt_field(value: str | None) -> str | None: ...
 | Update beer entry | Encrypt updated fields before writing to DB |
 | Read own beer entries (`GET /beers/me`) | Decrypt all fields in the service layer before returning |
 | Admin views all beers (`GET /admin/beers`) | Decrypt all fields in the service layer before returning |
-| Calendar unlock response | Decrypt linked beer fields in the calendar service layer only if `unlock_date ≤ now` |
+| Calendar unlock response | Decrypt linked beer fields in the calendar service layer only if `unlock_date ≤ now` for the requested year/day |
 | Locked calendar response | Do not include any encrypted field or its ID |
 
 ---
@@ -437,16 +480,22 @@ All require an active session.
 - **Response 200:** `[ { "display_name": string, "beer_count": int } ]`
 
 #### `GET /calendar`
-- Returns all 24 calendar entries with unlock-aware content.
+- Returns all 24 calendar entries with unlock-aware content for a single year.
+- Optional query param: `year` (int). If omitted, default to current UTC year.
 - Locked entries return only safe fields (day, unlock_date, title).
 - Unlocked entries return full content and decrypted beer details if a beer is linked.
 - **Response 200:** `[ CalendarEntryOut ]`
 
 #### `GET /calendar/{day}`
-- Returns a single calendar entry (1–24).
+- Returns a single calendar entry (1–24) for a single year.
+- Optional query param: `year` (int). If omitted, default to current UTC year.
 - Same unlock-aware logic as above.
 - **Response 200:** `CalendarEntryOut`
-- **Response 404:** day not found.
+- **Response 404:** day/year not found.
+
+#### `GET /calendar/years`
+- Returns available calendar years (descending) so the UI can browse history.
+- **Response 200:** `[ { "year": int } ]`
 
 ---
 
@@ -482,15 +531,16 @@ All require an active session with role `admin`.
 - **Response 200:** `[ AdminBeerEntryOut ]`
 
 #### `GET /admin/calendar`
-- Returns all 24 calendar entries with full content (ignores unlock date).
+- Returns all 24 calendar entries with full content (ignores unlock date) for a single year.
+- Optional query param: `year` (int). If omitted, default to current UTC year.
 - Includes decrypted beer details for any linked beer.
 - **Response 200:** `[ AdminCalendarEntryOut ]`
 
 #### `POST /admin/calendar`
-- Creates a calendar entry.
-- **Request body:** `CalendarEntryCreate { day, unlock_date, title, content, image_url? }`
+- Creates a calendar entry for a specific year.
+- **Request body:** `CalendarEntryCreate { year, day, unlock_date, title, content, image_url? }`
 - **Response 201:** `AdminCalendarEntryOut`
-- **Response 409:** day already exists.
+- **Response 409:** day already exists for that year.
 
 #### `PUT /admin/calendar/{entry_id}`
 - Updates a calendar entry (does not touch beer assignment).
@@ -502,7 +552,7 @@ All require an active session with role `admin`.
 - **Response 204:** no content.
 
 #### `PUT /admin/calendar/{entry_id}/beer`
-- Assigns a beer entry to a calendar day.
+- Assigns a beer entry to a calendar day in a specific year (identified by `entry_id`).
 - **Request body:** `{ "beer_entry_id": UUID }`
 - Enforces uniqueness: a beer entry can only be assigned to one day.
 - **Response 200:** `AdminCalendarEntryOut`
@@ -537,18 +587,18 @@ id, user_id, display_name (owner), beer_name, brewery, untappd_url, comment, rat
 
 Locked state:
 ```
-id, day, unlock_date, title, is_locked: true
+id, year, day, unlock_date, title, is_locked: true
 ```
 
 Unlocked state:
 ```
-id, day, unlock_date, title, content, image_url, is_locked: false,
+id, year, day, unlock_date, title, content, image_url, is_locked: false,
 beer?: { id, beer_name, brewery, untappd_url, comment, rating, submitted_by }
 ```
 
 #### `AdminCalendarEntryOut` (admin-facing, full data)
 ```
-id, day, unlock_date, title, content, image_url,
+id, year, day, unlock_date, title, content, image_url,
 beer_entry_id,
 beer?: { id, user_id, display_name, beer_name, brewery, untappd_url, comment, rating }
 ```
@@ -564,7 +614,7 @@ beer?: { id, user_id, display_name, beer_name, brewery, untappd_url, comment, ra
 | Edit own beer | Authenticated; `beer.user_id == current_user.id`; beer not assigned to calendar |
 | Delete own beer | Authenticated; `beer.user_id == current_user.id`; beer not assigned to calendar |
 | View leaderboard | Authenticated |
-| View calendar | Authenticated; locked entries return only safe fields |
+| View calendar | Authenticated; year defaults to current UTC year; locked entries return only safe fields |
 | View locked beer | Blocked server-side regardless of auth level for non-admins |
 | All `/admin/*` routes | Role must be `"admin"` |
 | Assign/unassign beer | Admin only (`PUT /admin/calendar/{id}/beer`, `DELETE /admin/calendar/{id}/beer`) |
@@ -601,15 +651,17 @@ At least 3 beer entries per active participant (Alice, Bob, Carol), covering a v
 
 ### Calendar entries
 
-24 entries, one per day:
+24 entries, one per day, per year:
+- `year`: current UTC year for new seed runs
 - `day`: 1–24
-- `unlock_date`: December 1–24 of the current calendar year at 08:00 UTC
+- `unlock_date`: December 1–24 of that `year` at 08:00 UTC
 - `title`: e.g., "Day 1", "Day 2", …
 - `content`: placeholder description text
 - `image_url`: null
 - `beer_entry_id`: null (admin assigns later)
 
-The seed should assign a few beer entries to early calendar days (days 1–5) for demo purposes.
+The seed should assign a few beer entries to early calendar days (days 1–5) for demo purposes in the seeded year.
+If prior years already exist, seeding must keep them unchanged and only insert missing rows for the target year.
 
 ---
 
@@ -623,11 +675,12 @@ The seed should assign a few beer entries to early calendar days (days 1–5) fo
 | `/login` | `LoginPage` | Public (redirect if logged in) | Two-step: request code, verify code |
 | `/dashboard` | `DashboardPage` | Authenticated | Own beer entries |
 | `/leaderboard` | `LeaderboardPage` | Authenticated | |
-| `/calendar` | `CalendarPage` | Authenticated | 24 doors overview |
-| `/calendar/:day` | `CalendarDayPage` | Authenticated | Single day detail |
+| `/calendar` | `CalendarPage` | Authenticated | Redirects to current year overview |
+| `/calendar/:year` | `CalendarPage` | Authenticated | 24 doors overview for a year |
+| `/calendar/:year/:day` | `CalendarDayPage` | Authenticated | Single day detail for a year |
 | `/admin` | `AdminDashboardPage` | Admin | Links to sub-pages |
 | `/admin/users` | `AdminUsersPage` | Admin | User CRUD |
-| `/admin/calendar` | `AdminCalendarPage` | Admin | Calendar + beer assignment |
+| `/admin/calendar` | `AdminCalendarPage` | Admin | Calendar + beer assignment for selected year |
 | `/admin/beers` | `AdminBeersPage` | Admin | View all beers |
 
 ### Protected route components
@@ -654,7 +707,7 @@ A typed API client module. Each backend route group gets its own file:
 - `auth.ts` — `requestCode`, `verifyCode`, `logout`, `me`.
 - `beers.ts` — `getMyBeers`, `createBeer`, `updateBeer`, `deleteBeer`.
 - `leaderboard.ts` — `getLeaderboard`.
-- `calendar.ts` — `getCalendar`, `getCalendarDay`.
+- `calendar.ts` — `getCalendar(year?)`, `getCalendarDay(day, year?)`, `getCalendarYears`.
 - `admin.ts` — all admin endpoints.
 
 The base client:
@@ -691,7 +744,8 @@ brobier/
 │
 ├── backend/
 │   ├── Dockerfile
-│   ├── requirements.txt
+│   ├── pyproject.toml
+│   ├── uv.lock
 │   ├── .env.example
 │   └── app/
 │       ├── main.py
@@ -854,11 +908,11 @@ This drops the `postgres_data` volume and recreates/reseeds the database.
 
 The following sequence minimises blocked steps and ensures each phase is testable before the next begins.
 
-1. **Project scaffolding** — Create directory structure, Docker Compose, Dockerfiles, `nginx/nginx.conf`, requirements.txt, package.json.
+1. **Project scaffolding** — Create directory structure, Docker Compose, Dockerfiles, `nginx/nginx.conf`, `backend/pyproject.toml`, `backend/uv.lock`, package.json.
 2. **Backend config & DB connection** — `config.py` (Pydantic Settings), `db/session.py`, `main.py` startup.
 3. **SQLModel models** — Define all five models with correct types, constraints, and relationships.
 4. **`init_db.py`** — `create_all` + call to seed function.
-5. **Seed data** — Insert admin, participants, beers, and calendar entries if DB is empty.
+5. **Seed data** — Insert admin, participants, beers, and year-scoped calendar entries idempotently, preserving prior years.
 6. **Encryption helpers** — `encrypt_field` / `decrypt_field` in `security.py`.
 7. **Auth service** — `request_code`, `verify_code`, session creation and revocation.
 8. **Email sender** — `send_login_code` via SMTP (Mailpit in dev).
@@ -867,8 +921,8 @@ The following sequence minimises blocked steps and ensures each phase is testabl
 11. **Beer schemas & service** — Pydantic schemas, CRUD with encryption/decryption.
 12. **Beer routes** — `/beers/me`, `POST /beers`, `PUT /beers/{id}`, `DELETE /beers/{id}`.
 13. **Leaderboard route** — `GET /leaderboard`.
-14. **Calendar service** — Unlock logic, field filtering.
-15. **Calendar routes** — `GET /calendar`, `GET /calendar/{day}`.
+14. **Calendar service** — Year-aware unlock logic, field filtering, history retrieval.
+15. **Calendar routes** — `GET /calendar`, `GET /calendar/{day}`, `GET /calendar/years`.
 16. **Admin service** — User CRUD, beer reads, calendar CRUD, beer assignment.
 17. **Admin routes** — All `/admin/*` endpoints.
 18. **Frontend scaffolding** — Vite 6 + React 19 + TypeScript + Tailwind CSS v4 + React Router v7 setup.
@@ -879,8 +933,8 @@ The following sequence minimises blocked steps and ensures each phase is testabl
 23. **Login page** — Two-step flow: request code → verify code.
 24. **Dashboard page** — Beer list, create/edit/delete form.
 25. **Leaderboard page** — Ranked table.
-26. **Calendar overview page** — 24 doors, locked/unlocked visual states.
-27. **Calendar day page** — Single door detail with beer info if unlocked.
+26. **Calendar overview page** — year navigation + 24 doors, locked/unlocked visual states.
+27. **Calendar day page** — Single year/day detail with beer info if unlocked.
 28. **Admin dashboard** — Links and overview.
 29. **Admin users page** — Create, edit, activate/deactivate.
 30. **Admin calendar page** — Create/edit calendar entries, assign/unassign beers.
