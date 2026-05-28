@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from loguru import logger
+
 from plugins.init_logger import pytest_configure
 
 

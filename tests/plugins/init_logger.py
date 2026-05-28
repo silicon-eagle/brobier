@@ -19,20 +19,14 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
-def pytest_runtest_makereport(
-    item: pytest.Item, call: pytest.CallInfo[Any]
-) -> Generator[None]:
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[Any]) -> Generator[None]:
     outcome = yield
     if outcome is None:
-        logger.warning(
-            f'No outcome from pytest_runtest_makereport for {item.nodeid} at phase {call.when}'
-        )
+        logger.warning(f'No outcome from pytest_runtest_makereport for {item.nodeid} at phase {call.when}')
         return
     rep = outcome.get_result()
     if rep.when != call.when:
-        logger.debug(
-            f'Hook phase mismatch for {item.nodeid}: rep={rep.when}, call={call.when}'
-        )
+        logger.debug(f'Hook phase mismatch for {item.nodeid}: rep={rep.when}, call={call.when}')
     setattr(item, 'rep_' + rep.when, rep)
 
 

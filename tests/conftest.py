@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import pytest
@@ -45,6 +44,4 @@ def setup_environment(root_path: Path) -> bool:
 @pytest.fixture
 def skip_if_missing_env_vars(setup_environment: bool) -> None:
     if not setup_environment:
-        pytest.skip(
-            'Skipping test because the environment variables could not be loaded from the .env file.'
-        )
+        pytest.skip('Skipping test because the environment variables could not be loaded from the .env file.')
