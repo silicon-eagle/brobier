@@ -10,16 +10,16 @@ Task ID format:
 ## Backend Tasks
 
 ### 1. Project and Runtime Setup
-- [ ] `BE-1.1` Create backend folder structure (`app/core`, `app/db`, `app/models`, `app/schemas`, `app/api/routes`, `app/services`, `app/auth`, `app/email`, `app/seeds`).
-- [ ] `BE-1.2` Add backend `Dockerfile` (Python 3.14 slim, install deps, uvicorn reload command).
-- [ ] `BE-1.3` Add `pyproject.toml` and `uv.lock` with uv-managed dependencies for FastAPI, SQLModel, SQLAlchemy, psycopg, cryptography, pytest, pytest-asyncio, Ruff, ty.
-- [ ] `BE-1.4` Add backend `.env.example` with DB, session, encryption, SMTP, CORS, environment settings.
+- [x] `BE-1.1` Create backend folder structure (`app/core`, `app/db`, `app/models`, `app/schemas`, `app/api/routes`, `app/services`, `app/auth`, `app/email`, `app/seeds`).
+- [x] `BE-1.2` Add backend `Dockerfile` (Python 3.14 slim, install deps, uvicorn reload command).
+- [x] `BE-1.3` Add `pyproject.toml` and `uv.lock` with uv-managed dependencies for FastAPI, SQLModel, SQLAlchemy, psycopg, cryptography, pytest, pytest-asyncio, Ruff, ty.
+- [x] `BE-1.4` Add backend `.env.example` with DB, session, encryption, SMTP, CORS, environment settings.
 
 ### 2. Configuration and Database Foundation
-- [ ] `BE-2.1` Implement `app/core/config.py` with Pydantic Settings and env parsing.
+- [x] `BE-2.1` Implement `app/core/config.py` with Pydantic Settings and env parsing.
 - [ ] `BE-2.2` Implement `app/db/session.py` with engine setup and `get_db` dependency.
 - [ ] `BE-2.3` Implement startup initialization flow in `app/main.py` (create schema + seed call).
-- [ ] `BE-2.4` Add `GET /health` endpoint.
+- [x] `BE-2.4` Add `GET /health` endpoint.
 
 ### 3. Data Models (SQLModel)
 - [ ] `BE-3.1` Implement `User` model with role enum, active flag, timestamps, unique email index.

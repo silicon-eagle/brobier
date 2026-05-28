@@ -47,6 +47,11 @@ When removing duplication:
 - Keep function names concrete.
 - Do not create abstraction layers "just in case".
 
+## Testing Policy
+
+- Do not use mocking, monkeypatching, or similar test doubles unless explicitly requested.
+- Prefer tests that exercise real code paths and real integrations in the local test environment.
+
 ## Backend Conventions
 
 - Keep business rules in service layer, not in route handlers.

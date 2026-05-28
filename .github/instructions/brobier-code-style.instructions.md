@@ -47,6 +47,8 @@ applyTo:
 - Backend tests use pytest and pytest-asyncio.
 - Frontend tests use Vitest and React Testing Library.
 - Add or update tests when changing business rules, auth/session behavior, calendar unlock logic, or authorization.
+- Do not use mocking, monkeypatching, or similar test doubles unless explicitly requested.
+- Prefer tests that execute real code paths and integrations in the local test environment.
 
 ## Decision Heuristic
 
