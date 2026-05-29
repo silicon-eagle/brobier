@@ -12,16 +12,16 @@ Task ID format:
 ### 1. Project and Runtime Setup
 - [x] `BE-1.1` Create backend folder structure (`app/core`, `app/db`, `app/models`, `app/schemas`, `app/api/routes`, `app/services`, `app/auth`, `app/email`, `app/seeds`).
 - [x] `BE-1.2` Add backend `Dockerfile` (Python 3.14 slim, install deps, uvicorn reload command).
-- [x] `BE-1.3` Add `pyproject.toml` and `uv.lock` with uv-managed dependencies for FastAPI, SQLModel, SQLAlchemy, psycopg, cryptography, pytest, pytest-asyncio, Ruff, ty.
+- [x] `BE-1.3` Add `pyproject.toml` and `uv.lock` with uv-managed dependencies for FastAPI, SQLAlchemy, psycopg, cryptography, pytest, pytest-asyncio, Ruff, ty.
 - [x] `BE-1.4` Add backend `.env.example` with DB, session, encryption, SMTP, CORS, environment settings.
 
 ### 2. Configuration and Database Foundation
 - [x] `BE-2.1` Implement `app/core/config.py` with Pydantic Settings and env parsing.
-- [ ] `BE-2.2` Implement `app/db/session.py` with engine setup and `get_db` dependency.
+- [x] `BE-2.2` Implement `app/db/session.py` with engine setup and `get_db` dependency.
 - [ ] `BE-2.3` Implement startup initialization flow in `app/main.py` (create schema + seed call).
 - [x] `BE-2.4` Add `GET /health` endpoint.
 
-### 3. Data Models (SQLModel)
+### 3. Data Models (SQLAlchemy)
 - [ ] `BE-3.1` Implement `User` model with role enum, active flag, timestamps, unique email index.
 - [ ] `BE-3.2` Implement `LoginCode` model with expiry + single-use fields.
 - [ ] `BE-3.3` Implement `Session` model with hashed token, expiry, revocation, last seen.
@@ -31,7 +31,7 @@ Task ID format:
 - [ ] `BE-3.7` Validate model relationships and FK directions against the spec diagram.
 
 ### 4. Seed and Init Logic
-- [ ] `BE-4.1` Implement `app/db/init_db.py` to run `SQLModel.metadata.create_all(engine)`.
+- [ ] `BE-4.1` Implement `app/db/init_db.py` to run `Base.metadata.create_all(engine)`.
 - [ ] `BE-4.2` Implement `app/seeds/seed.py` with idempotent seed strategy.
 - [ ] `BE-4.3` Seed admin + participant users.
 - [ ] `BE-4.4` Seed sample beer entries for active users.

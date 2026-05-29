@@ -6,7 +6,7 @@ The calendar is year-based (24 doors per year), and previous years are preserved
 
 ## Core Architecture
 
-- Backend: FastAPI (Python 3.14), SQLModel, PostgreSQL
+- Backend: FastAPI (Python 3.14), SQLAlchemy, PostgreSQL
 - Frontend: React 19 + TypeScript, Vite 6, React Router v7, Tailwind CSS v4
 - Auth: Passwordless login code flow + server-side sessions via HTTP-only cookies
 - Security: Fernet encryption for sensitive beer fields, role-based authorization, unlock-aware calendar responses

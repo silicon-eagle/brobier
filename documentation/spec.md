@@ -40,7 +40,7 @@ Brobier is a private, self-hosted web application that runs an advent-calendar-s
 |---|---|
 | Backend language | Python 3.14 |
 | Web framework | FastAPI |
-| ORM | SQLModel |
+| ORM | SQLAlchemy |
 | Validation | Pydantic v2 |
 | Database | PostgreSQL 18 |
 | Auth | Passwordless email code + server-side sessions |
@@ -193,7 +193,7 @@ VITE_API_BASE_URL=http://localhost/api
 
 ## 5. Database Models
 
-All models use SQLModel. Table creation runs at startup via `SQLModel.metadata.create_all(engine)`.
+All models use SQLAlchemy. Table creation runs at startup via `Base.metadata.create_all(engine)`.
 
 ### 5.1 User
 
@@ -894,7 +894,7 @@ This drops the `postgres_data` volume and recreates/reseeds the database.
 | Encrypted field leakage | Encrypted column values never appear in API responses; decryption happens in the service layer |
 | Locked calendar leakage | Backend strips all sensitive fields before unlock date, regardless of auth level |
 | Unauthorised admin access | `require_admin` dependency enforced on all `/admin/*` routes |
-| SQL injection | All queries via SQLModel/SQLAlchemy ORM; no raw SQL strings |
+| SQL injection | All queries via SQLAlchemy ORM; no raw SQL strings |
 | Secrets in source | Keys only in `.env` files; `.env` is in `.gitignore` |
 | Insecure direct object reference | Ownership check (`beer.user_id == current_user.id`) on every mutating beer endpoint |
 | Overly permissive CORS | `CORS_ORIGINS` env var explicitly lists allowed origins (only `http://localhost` in dev) |
@@ -910,7 +910,7 @@ The following sequence minimises blocked steps and ensures each phase is testabl
 
 1. **Project scaffolding** — Create directory structure, Docker Compose, Dockerfiles, `nginx/nginx.conf`, `backend/pyproject.toml`, `backend/uv.lock`, package.json.
 2. **Backend config & DB connection** — `config.py` (Pydantic Settings), `db/session.py`, `main.py` startup.
-3. **SQLModel models** — Define all five models with correct types, constraints, and relationships.
+3. **SQLAlchemy models** — Define all five models with correct types, constraints, and relationships.
 4. **`init_db.py`** — `create_all` + call to seed function.
 5. **Seed data** — Insert admin, participants, beers, and year-scoped calendar entries idempotently, preserving prior years.
 6. **Encryption helpers** — `encrypt_field` / `decrypt_field` in `security.py`.

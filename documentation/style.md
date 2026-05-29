@@ -57,7 +57,7 @@ When removing duplication:
 - Keep business rules in service layer, not in route handlers.
 - Keep route handlers thin: validate input, call service, return response.
 - Put shared security logic (hashing, encryption, auth checks) in dedicated modules.
-- Prefer SQLModel query clarity over clever query composition.
+- Prefer SQLAlchemy query clarity over clever query composition.
 
 ## Frontend Conventions
 

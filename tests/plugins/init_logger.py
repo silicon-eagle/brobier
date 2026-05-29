@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 from loguru import logger
-from tests.setup_logger import setup_logger
+from tests.backend.setup_logger import setup_logger
 
 
 def _setup_logger() -> None:
