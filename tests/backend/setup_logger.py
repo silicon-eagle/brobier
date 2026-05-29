@@ -20,7 +20,8 @@ def default_logger_format() -> str:
 
 
 def setup_logger(
-    level: str = 'DEBUG',
+    file_level: str = 'DEBUG',
+    console_level: str | None = None,
     log_dir: Path = Path.cwd() / '.log',
     fmt: str = default_logger_format(),
 ) -> None:
@@ -31,33 +32,37 @@ def setup_logger(
     (10 MB chunks) with backtrace / diagnose enabled for richer error output.
 
     Args:
-        level: Minimum log level name to emit (e.g. ``DEBUG``).
+        file_level: Minimum log level name to emit (e.g. ``DEBUG``).
+        console_level: Minimum log level name to emit to stderr (e.g. ``INFO``).
         log_dir: Directory in which to create the dated log file.
         fmt: Loguru format string.
+
     """
     log_dir.mkdir(exist_ok=True)
 
     date_str = datetime.now().strftime('%Y-%m-%d')
     log_file = log_dir / f'{date_str}_logfile.log'
 
-    # Remove all default Loguru sinks
+    # Remove all default loguru sinks
     logger.remove()
 
     # Add console sink
-    logger.add(
-        stderr,
-        format=fmt,
-        level=level,
-        colorize=True,
-    )
+    if console_level:
+        logger.add(
+            stderr,
+            format=fmt,
+            level=console_level,
+            colorize=True,
+        )
 
     # Add file sink with structured logging
-    logger.add(
-        log_file,
-        rotation='10 MB',
-        level=level,
-        format=fmt,
-        enqueue=True,
-        backtrace=True,
-        diagnose=True,
-    )
+    if file_level:
+        logger.add(
+            log_file,
+            rotation='10 MB',
+            level=file_level,
+            format=fmt,
+            enqueue=True,
+            backtrace=True,
+            diagnose=True,
+        )

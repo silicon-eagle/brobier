@@ -27,6 +27,7 @@ applyTo:
 - Keep business rules in service modules, not route modules.
 - Keep shared security logic centralized in dedicated modules (hashing, encryption, auth checks).
 - Prefer clear SQLModel queries over clever composition.
+- Use single quotes for all strings in Python (`'value'`, not `"value"`). Use double quotes only when the string itself contains a single quote.
 
 ## Frontend Rules
 
@@ -50,7 +51,13 @@ applyTo:
 - Do not use mocking, monkeypatching, or similar test doubles unless explicitly requested.
 - Prefer tests that execute real code paths and integrations in the local test environment.
 
-## Decision Heuristic
+## Python Path Handling
+
+- Always use `pathlib.Path` for all path operations in Python.
+- Never use `os.path`, `os.getcwd()`, `os.chdir()`, or any other `os` module path functions.
+- Use `Path.cwd()`, `path.chdir()`, `path / 'subdir'`, `path.read_text()`, etc. instead.
+
+
 
 - Choose the version that is easiest to read today.
 - Keep change scope small.

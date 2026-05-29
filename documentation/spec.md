@@ -199,7 +199,7 @@ All models use SQLAlchemy. Table creation runs at startup via `Base.metadata.cre
 
 | Column | Type | Constraints |
 |---|---|---|
-| `id` | `UUID` | PK, default `uuid4` |
+| `id` | `UUID` | PK, generated |
 | `email` | `str` | unique, not null, indexed |
 | `display_name` | `str` | not null |
 | `role` | `enum("user","admin")` | not null, default `"user"` |
@@ -211,12 +211,13 @@ All models use SQLAlchemy. Table creation runs at startup via `Base.metadata.cre
 
 | Column | Type | Constraints |
 |---|---|---|
-| `id` | `UUID` | PK, default `uuid4` |
+| `id` | `int` | PK, autoincrement |
 | `user_id` | `UUID` | FK → User, not null |
 | `code_hash` | `str` | not null |
 | `expires_at` | `datetime` | not null |
 | `used_at` | `datetime` | nullable |
 | `created_at` | `datetime` | not null, default `utcnow` |
+| `updated_at` | `datetime` | not null, updated on save |
 
 - A code is valid if `used_at IS NULL` and `expires_at > now`.
 - On use, set `used_at = now` immediately (single-use).
@@ -225,7 +226,7 @@ All models use SQLAlchemy. Table creation runs at startup via `Base.metadata.cre
 
 | Column | Type | Constraints |
 |---|---|---|
-| `id` | `UUID` | PK, default `uuid4` |
+| `id` | `int` | PK, autoincrement |
 | `user_id` | `UUID` | FK → User, not null |
 | `session_token_hash` | `str` | not null, indexed |
 | `expires_at` | `datetime` | not null |
@@ -240,13 +241,14 @@ All models use SQLAlchemy. Table creation runs at startup via `Base.metadata.cre
 
 | Column | Type | Constraints |
 |---|---|---|
-| `id` | `UUID` | PK, default `uuid4` |
+| `id` | `int` | PK, autoincrement |
 | `user_id` | `UUID` | FK → User, not null |
 | `beer_name_encrypted` | `str` | not null |
 | `brewery_encrypted` | `str` | not null |
 | `untappd_url_encrypted` | `str` | nullable |
 | `comment_encrypted` | `str` | nullable |
-| `rating` | `int` | nullable, check 1 ≤ rating ≤ 5 |
+| `bought_from` | `str` | not null |
+| `bought_at` | `datetime` | not null |
 | `created_at` | `datetime` | not null, default `utcnow` |
 | `updated_at` | `datetime` | not null, updated on save |
 
@@ -254,7 +256,7 @@ All models use SQLAlchemy. Table creation runs at startup via `Base.metadata.cre
 
 | Column | Type | Constraints |
 |---|---|---|
-| `id` | `UUID` | PK, default `uuid4` |
+| `id` | `int` | PK, autoincrement |
 | `year` | `int` | not null, indexed, check year ≥ 2020 |
 | `day` | `int` | not null, check 1 ≤ day ≤ 24 |
 | `unlock_date` | `datetime` | not null |
@@ -262,12 +264,28 @@ All models use SQLAlchemy. Table creation runs at startup via `Base.metadata.cre
 | `title` | `str` | not null |
 | `content` | `str` | not null |
 | `image_url` | `str` | nullable |
-| `beer_entry_id` | `UUID` | FK → BeerEntry, nullable, unique |
+| `beer_entry_id` | `int` | FK → BeerEntry, nullable, unique |
 | `created_at` | `datetime` | not null, default `utcnow` |
 | `updated_at` | `datetime` | not null, updated on save |
 
 - Composite uniqueness constraint on (`year`, `day`) so each year has exactly one entry per day.
 - Historical rows are immutable by year boundaries: creating a new year must not delete prior years.
+
+### 5.6 UserRating
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | `int` | PK, autoincrement |
+| `user_id` | `UUID` | FK → User, not null |
+| `beer_entry_id` | `int` | FK → BeerEntry, not null |
+| `rating` | `float` | not null, check 1.0 ≤ rating ≤ 5.0 |
+| `comment` | `str` | nullable |
+| `drank_at` | `datetime` | nullable |
+| `created_at` | `datetime` | not null, default `utcnow` |
+| `updated_at` | `datetime` | not null, updated on save |
+
+- Composite uniqueness constraint on (`user_id`, `beer_entry_id`): each user can rate a beer only once.
+- `rating` is a float to allow half-star granularity (e.g. 3.5).
 
 ### Relationships summary
 
@@ -277,40 +295,54 @@ DATABASE RELATIONSHIP DIAGRAM (ASCII)
     +------------------------+             1 ---- *             +------------------------+
     |          User          |--------------------------------->|       BeerEntry        |
     |------------------------|                                  |------------------------|
-    | PK id (UUID)           |<---------------------------------| PK id (UUID)           |
+    | PK id (int)            |<---------------------------------| PK id (int)            |
     | email (UNIQUE, INDEX)  |          * ---- 1               | FK user_id -> User.id  |
     | display_name           |                                  | beer_name_encrypted    |
     | role, is_active        |<---------------------------------| brewery_encrypted      |
     | created_at, updated_at |          * ---- 1               | untappd_url_encrypted? |
     +------------------------+                                  | comment_encrypted?     |
-              ^                                                 | rating                 |
-              | * ---- 1                                        | created_at, updated_at |
-              |                                                 +------------------------+
-    +------------------------+                                             |
-    |       LoginCode        |                                             | 0..1 ---- 0..1
-    |------------------------|                                             v
-    | PK id (UUID)           |                                  +------------------------+
-    | FK user_id -> User.id  |                                  |     CalendarEntry      |
-    | code_hash              |                                  |------------------------|
-    | expires_at, used_at    |                                  | PK id (UUID)           |
-    | created_at             |                                  | year, day              |
-    +------------------------+                                  | unlock_date            |
-                                                                | published_at?          |
-    +------------------------+                                  | title, content         |
-    |        Session         |                                  | image_url?             |
-    |------------------------|                                  | FK beer_entry_id?      |
-    | PK id (UUID)           |                                  | UNIQUE(year, day)      |
-    | FK user_id -> User.id  |                                  | UNIQUE(beer_entry_id)  |
-    | session_token_hash     |                                  | created_at, updated_at |
-    | expires_at, revoked_at |                                  +------------------------+
-    | created_at, last_seen  |
-    +------------------------+
+              ^    ^                                            | bought_from            |
+              |    | * ---- 1                                   | bought_at              |
+              |    |                                            | created_at, updated_at |
+              |  +------------------------+                    +------------------------+
+              |  |       LoginCode        |                               |
+              |  |------------------------|                               | 1 ---- *
+              |  | PK id (int)            |                               v
+              |  | FK user_id -> User.id  |                    +------------------------+
+              |  | code_hash              |                    |      UserRating        |
+              |  | expires_at, used_at    |                    |------------------------|
+              |  | created_at, updated_at |                    | PK id (int)            |
+              |  +------------------------+                    | FK user_id -> User.id  |
+              |                                                | FK beer_entry_id       |
+              | * ---- 1                                       | rating (float, 1-5)    |
+              |                                                | comment?               |
+    +------------------------+                                 | drank_at?              |
+    |        Session         |                                 | created_at, updated_at |
+    |------------------------|                                 | UNIQUE(user, beer)     |
+    | PK id (int)            |                                 +------------------------+
+    | FK user_id -> User.id  |
+    | session_token_hash     |                    +------------------------+
+    | expires_at, revoked_at |                    |     CalendarEntry      |
+    | created_at, last_seen  |                    |------------------------|
+    +------------------------+                    | PK id (int)            |
+                                                  | year, day              |
+                                                  | unlock_date            |
+                                                  | published_at?          |
+                                                  | title, content         |
+                                                  | image_url?             |
+                                                  | FK beer_entry_id?      |
+                                                  | UNIQUE(year, day)      |
+                                                  | UNIQUE(beer_entry_id)  |
+                                                  | created_at, updated_at |
+                                                  +------------------------+
 
     FK mapping
     - BeerEntry.user_id -> User.id
     - LoginCode.user_id -> User.id
     - Session.user_id -> User.id
     - CalendarEntry.beer_entry_id -> BeerEntry.id
+    - UserRating.user_id -> User.id
+    - UserRating.beer_entry_id -> BeerEntry.id
 
     * encrypted fields in BeerEntry: beer_name, brewery, untappd_url, comment
 ```
@@ -456,7 +488,7 @@ All require an active session.
 
 #### `POST /beers`
 - Creates a new beer entry owned by the current user.
-- **Request body:** `BeerEntryCreate { beer_name, brewery, untappd_url?, comment?, rating? }`
+- **Request body:** `BeerEntryCreate { beer_name, brewery, untappd_url?, comment?, bought_from, bought_at }`
 - Encrypts fields before storage.
 - **Response 201:** `BeerEntryOut`
 
@@ -474,6 +506,25 @@ All require an active session.
 - **Response 204:** no content.
 - **Response 403:** not owner.
 - **Response 409:** assigned to calendar entry (cannot delete).
+
+#### `POST /beers/{beer_id}/ratings`
+- Submits a rating for a beer entry on behalf of the current user.
+- **Authorization:** any authenticated user may rate any beer entry (including beers they submitted themselves).
+- **Request body:** `UserRatingCreate { rating, comment?, drank_at? }`
+- **Response 201:** `UserRatingOut`
+- **Response 404:** beer entry not found.
+- **Response 409:** current user has already rated this beer (one rating per user per beer).
+
+#### `PUT /beers/{beer_id}/ratings/me`
+- Updates the current user's existing rating for a beer entry.
+- **Request body:** `UserRatingUpdate` (all fields optional).
+- **Response 200:** `UserRatingOut`
+- **Response 404:** beer entry not found, or current user has not yet rated this beer.
+
+#### `DELETE /beers/{beer_id}/ratings/me`
+- Deletes the current user's rating for a beer entry.
+- **Response 204:** no content.
+- **Response 404:** beer entry not found, or current user has not yet rated this beer.
 
 #### `GET /leaderboard`
 - Returns all active users ranked by total beer count, descending.
@@ -574,13 +625,18 @@ id, email, display_name, role, is_active, created_at, updated_at
 
 #### `BeerEntryOut`
 ```
-id, user_id, beer_name, brewery, untappd_url, comment, rating, created_at, updated_at
+id, user_id, beer_name, brewery, untappd_url, comment, bought_from, bought_at, created_at, updated_at
 ```
-(All fields decrypted in this schema. Encrypted column names are internal only.)
+(All encrypted fields decrypted in this schema. Encrypted column names are internal only.)
 
 #### `AdminBeerEntryOut`
 ```
-id, user_id, display_name (owner), beer_name, brewery, untappd_url, comment, rating, created_at, updated_at
+id, user_id, display_name (owner), beer_name, brewery, untappd_url, comment, bought_from, bought_at, created_at, updated_at
+```
+
+#### `UserRatingOut`
+```
+id, user_id, beer_entry_id, rating, comment, drank_at, created_at, updated_at
 ```
 
 #### `CalendarEntryOut` (user-facing, unlock-aware)
@@ -593,14 +649,14 @@ id, year, day, unlock_date, title, is_locked: true
 Unlocked state:
 ```
 id, year, day, unlock_date, title, content, image_url, is_locked: false,
-beer?: { id, beer_name, brewery, untappd_url, comment, rating, submitted_by }
+beer?: { id, beer_name, brewery, untappd_url, comment, bought_from, submitted_by, ratings: [UserRatingOut] }
 ```
 
 #### `AdminCalendarEntryOut` (admin-facing, full data)
 ```
 id, year, day, unlock_date, title, content, image_url,
 beer_entry_id,
-beer?: { id, user_id, display_name, beer_name, brewery, untappd_url, comment, rating }
+beer?: { id, user_id, display_name, beer_name, brewery, untappd_url, comment, bought_from, bought_at, ratings: [UserRatingOut] }
 ```
 
 ---
@@ -613,6 +669,9 @@ beer?: { id, user_id, display_name, beer_name, brewery, untappd_url, comment, ra
 | Create beer | Authenticated |
 | Edit own beer | Authenticated; `beer.user_id == current_user.id`; beer not assigned to calendar |
 | Delete own beer | Authenticated; `beer.user_id == current_user.id`; beer not assigned to calendar |
+| Submit rating | Authenticated; any user may rate any beer; one rating per user per beer |
+| Edit own rating | Authenticated; `rating.user_id == current_user.id` |
+| Delete own rating | Authenticated; `rating.user_id == current_user.id` |
 | View leaderboard | Authenticated |
 | View calendar | Authenticated; year defaults to current UTC year; locked entries return only safe fields |
 | View locked beer | Blocked server-side regardless of auth level for non-admins |
