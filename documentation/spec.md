@@ -8,7 +8,7 @@
 4. [Environment Configuration](#4-environment-configuration)
 5. [Database Models](#5-database-models)
 6. [Encryption](#6-encryption)
-7. [Authentication & Sessions](#7-authentication--sessions)
+7. [Authentication & JWT](#7-authentication--jwt)
 8. [Backend API](#8-backend-api)
 9. [Authorization Rules](#9-authorization-rules)
 10. [Seed Data](#10-seed-data)
@@ -43,8 +43,8 @@ Brobier is a private, self-hosted web application that runs an advent-calendar-s
 | ORM | SQLAlchemy |
 | Validation | Pydantic v2 |
 | Database | PostgreSQL 18 |
-| Auth | Passwordless email code + server-side sessions |
-| Sessions | HTTP-only secure cookies + hashed token in DB |
+| Auth | Passwordless email code + JWT (access token) + refresh token |
+| Token storage | Access JWT in memory (Authorization header); refresh token in HTTP-only cookie |
 | Encryption | Fernet (authenticated symmetric encryption, from `cryptography`) |
 | Frontend language | TypeScript |
 | Frontend framework | React 19 |
@@ -158,10 +158,11 @@ server {
 # Database
 DATABASE_URL=postgresql+psycopg://brobier:brobier@db:5432/brobier
 
-# Session
-SESSION_COOKIE_NAME=brobier_session
-SESSION_SECRET=change-me-in-production
-SESSION_EXPIRE_SECONDS=604800
+# JWT
+JWT_SECRET=change-me-in-production
+JWT_ACCESS_EXPIRE_MINUTES=15
+JWT_REFRESH_EXPIRE_DAYS=7
+JWT_REFRESH_COOKIE_NAME=brobier_refresh
 
 # Encryption
 BEER_ENCRYPTION_KEY=<Fernet key — generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())">
@@ -222,20 +223,20 @@ All models use SQLAlchemy. Table creation runs at startup via `Base.metadata.cre
 - A code is valid if `used_at IS NULL` and `expires_at > now`.
 - On use, set `used_at = now` immediately (single-use).
 
-### 5.3 Session
+### 5.3 RefreshToken
 
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | `int` | PK, autoincrement |
 | `user_id` | `UUID` | FK → User, not null |
-| `session_token_hash` | `str` | not null, indexed |
+| `token_hash` | `str` | not null, indexed |
 | `expires_at` | `datetime` | not null |
-| `created_at` | `datetime` | not null, default `utcnow` |
-| `last_seen_at` | `datetime` | not null, updated on each request |
 | `revoked_at` | `datetime` | nullable |
+| `created_at` | `datetime` | not null, default `utcnow` |
 
-- A session is valid if `revoked_at IS NULL` and `expires_at > now`.
-- Only the hash of the token is stored. The raw token is set as the cookie value.
+- A refresh token is valid if `revoked_at IS NULL` and `expires_at > now`.
+- Only the SHA-256 hash of the raw token is stored; the raw value is sent to the client as an HTTP-only cookie.
+- Access JWTs are stateless and therefore **not** stored in the database; they are validated solely by their signature and expiry claim.
 
 ### 5.4 BeerEntry
 
@@ -317,13 +318,13 @@ DATABASE RELATIONSHIP DIAGRAM (ASCII)
               | * ---- 1                                       | rating (float, 1-5)    |
               |                                                | comment?               |
     +------------------------+                                 | drank_at?              |
-    |        Session         |                                 | created_at, updated_at |
+    |      RefreshToken      |                                 | created_at, updated_at |
     |------------------------|                                 | UNIQUE(user, beer)     |
     | PK id (int)            |                                 +------------------------+
     | FK user_id -> User.id  |
-    | session_token_hash     |                    +------------------------+
+    | token_hash (INDEX)     |                    +------------------------+
     | expires_at, revoked_at |                    |     CalendarEntry      |
-    | created_at, last_seen  |                    |------------------------|
+    | created_at             |                    |------------------------|
     +------------------------+                    | PK id (int)            |
                                                   | year, day              |
                                                   | unlock_date            |
@@ -339,7 +340,7 @@ DATABASE RELATIONSHIP DIAGRAM (ASCII)
     FK mapping
     - BeerEntry.user_id -> User.id
     - LoginCode.user_id -> User.id
-    - Session.user_id -> User.id
+    - RefreshToken.user_id -> User.id
     - CalendarEntry.beer_entry_id -> BeerEntry.id
     - UserRating.user_id -> User.id
     - UserRating.beer_entry_id -> BeerEntry.id
@@ -385,7 +386,7 @@ def decrypt_field(value: str | None) -> str | None: ...
 
 ---
 
-## 7. Authentication & Sessions
+## 7. Authentication & JWT
 
 ### 7.1 Login flow
 
@@ -398,38 +399,55 @@ def decrypt_field(value: str | None) -> str | None: ...
 
 2. POST /auth/verify-code  { email, code }
    → Backend looks up LoginCode for the email that is unexpired and unused.
-   → If valid: mark used_at = now, create Session, set HTTP-only cookie.
+   → If valid: mark used_at = now, create RefreshToken (store hash), issue JWT access token.
+   → Sets refresh token as an HTTP-only cookie.
+   → Returns JWT access token + current user object in the response body.
    → If invalid: return 401 with a generic error.
-   → Response includes the current user object (id, display_name, role).
 
-3. POST /auth/logout
-   → Set revoked_at = now on the current session.
-   → Clear the cookie.
+3. POST /auth/refresh
+   → Reads the refresh token from the HTTP-only cookie.
+   → Validates it: not revoked, not expired, hash matches a DB row.
+   → Issues a new JWT access token (15-minute expiry).
+   → Returns { access_token, token_type: "bearer" } in the response body.
+   → Returns 401 if the refresh token is absent, invalid, or expired.
 
-4. GET /auth/me
-   → Returns the current user if a valid session cookie is present.
-   → Returns 401 if no valid session.
+4. POST /auth/logout
+   → Sets revoked_at = now on the current RefreshToken row.
+   → Clears the refresh-token cookie.
+
+5. GET /auth/me
+   → Requires a valid JWT in the Authorization: Bearer <token> header.
+   → Returns the current user if the JWT is valid and not expired.
+   → Returns 401 if the JWT is absent, invalid, or expired.
 ```
 
-### 7.2 Session cookie
+### 7.2 JWT access token
 
-- Name: `SESSION_COOKIE_NAME` from config (default `brobier_session`).
+- Algorithm: `HS256` signed with `JWT_SECRET`.
+- Expiry: `JWT_ACCESS_EXPIRE_MINUTES` (default **15 minutes**).
+- Payload claims: `sub` (user id as string), `exp`, `iat`.
+- Transmitted by the client in the `Authorization: Bearer <token>` header.
+- **Not stored in the database** — validated purely by signature and expiry.
+
+### 7.3 Refresh token cookie
+
+- Name: `JWT_REFRESH_COOKIE_NAME` from config (default `brobier_refresh`).
 - `HttpOnly: true`
 - `SameSite: Lax`
 - `Secure: true` in production; `false` in development.
-- `Path: /`
-- Expiry: `SESSION_EXPIRE_SECONDS` (default 7 days).
+- `Path: /auth/refresh` (scoped so it is only sent to the refresh endpoint).
+- Expiry: `JWT_REFRESH_EXPIRE_DAYS` (default 7 days).
+- Only the SHA-256 hash of the raw token value is stored in the `refresh_tokens` table.
 
-### 7.3 Session middleware / dependency
+### 7.4 Auth dependencies
 
 ```python
 async def get_current_user(request: Request, db: Session) -> User:
-    # 1. Read raw token from cookie.
-    # 2. Hash it and look up Session in DB.
-    # 3. Validate: not revoked, not expired.
-    # 4. Update last_seen_at.
-    # 5. Return the associated User.
-    # 6. Raise HTTP 401 if anything fails.
+    # 1. Read Bearer token from Authorization header.
+    # 2. Decode and verify JWT (signature + expiry) using JWT_SECRET.
+    # 3. Extract user id from the `sub` claim.
+    # 4. Load and return the User from the database.
+    # 5. Raise HTTP 401 if the token is absent, malformed, expired, or the user no longer exists.
 
 async def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "admin":
@@ -437,7 +455,7 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 ```
 
-### 7.4 Login code details
+### 7.5 Login code details
 
 - Code: 6 random decimal digits (`secrets.randbelow` or `str(secrets.token_hex(3)).zfill(6)` resampled to 6 digits).
 - Hash: `hashlib.sha256(code.encode()).hexdigest()` — fast is acceptable because codes are short-lived (10 min) and rate-limiting is acceptable at the application layer.
@@ -462,25 +480,31 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 #### `POST /auth/verify-code`
 - **Request body:** `{ "email": string, "code": string }`
-- **Logic:** Validate code, create session, set cookie.
-- **Response 200:** `{ "user": { "id", "display_name", "role" } }`
+- **Logic:** Validate code, create RefreshToken (store hash), issue JWT access token, set refresh cookie.
+- **Response 200:** `{ "access_token": string, "token_type": "bearer", "user": { "id", "display_name", "role" } }`
 - **Response 401:** `{ "detail": "Invalid or expired code." }`
 
+#### `POST /auth/refresh`
+- **Auth required:** valid `brobier_refresh` HTTP-only cookie.
+- **Logic:** Validate refresh token hash against DB; issue a new JWT access token.
+- **Response 200:** `{ "access_token": string, "token_type": "bearer" }`
+- **Response 401:** refresh token absent, invalid, revoked, or expired.
+
 #### `POST /auth/logout`
-- **Auth required:** valid session cookie.
-- **Logic:** Revoke session, clear cookie.
+- **Auth required:** valid `brobier_refresh` HTTP-only cookie.
+- **Logic:** Revoke RefreshToken row (`revoked_at = now`), clear refresh cookie.
 - **Response 200:** `{ "message": "Logged out." }`
 
 #### `GET /auth/me`
-- **Auth required:** valid session cookie.
+- **Auth required:** valid JWT in `Authorization: Bearer <token>` header.
 - **Response 200:** `{ "id", "display_name", "role" }`
-- **Response 401:** no session.
+- **Response 401:** JWT absent, invalid, or expired.
 
 ---
 
 ### 8.2 User endpoints
 
-All require an active session.
+All require a valid JWT in the `Authorization: Bearer <token>` header.
 
 #### `GET /beers/me`
 - Returns the current user's beer entries, decrypted.
@@ -552,7 +576,7 @@ All require an active session.
 
 ### 8.3 Admin endpoints
 
-All require an active session with role `admin`.
+All require a valid JWT with role `admin` in the `Authorization: Bearer <token>` header.
 
 #### `GET /admin/users`
 - Returns all users.
@@ -771,14 +795,16 @@ A typed API client module. Each backend route group gets its own file:
 
 The base client:
 - Reads `VITE_API_BASE_URL` from env.
-- Always sends `credentials: "include"` for cookies.
-- Throws a typed `ApiError` on non-2xx responses.
+- Stores the JWT access token in memory (React context / closure) and attaches it as `Authorization: Bearer <token>` on every authenticated request.
+- Always sends `credentials: "include"` so the `brobier_refresh` cookie is forwarded to `/auth/refresh`.
+- Automatically calls `POST /auth/refresh` when it receives a `401` response, then retries the original request once with the new access token.
+- Throws a typed `ApiError` on non-2xx responses that cannot be recovered by a token refresh.
 
 ### `frontend/src/auth/`
 
-- `AuthContext.tsx` — React context providing `user`, `isLoading`, `login`, `logout`.
+- `AuthContext.tsx` — React context providing `user`, `isLoading`, `login`, `logout`, and the in-memory access token setter.
 - `useAuth.ts` — convenience hook returning auth context.
-- On mount, calls `GET /auth/me` to hydrate session state.
+- On mount, calls `POST /auth/refresh` (using the HttpOnly cookie) to hydrate auth state and obtain a fresh access token. Falls back to unauthenticated state on 401.
 
 ### `frontend/src/types/`
 
@@ -817,7 +843,7 @@ brobier/
 │       ├── models/
 │       │   ├── user.py
 │       │   ├── login_code.py
-│       │   ├── session.py
+│       │   ├── refresh_token.py
 │       │   ├── beer_entry.py
 │       │   └── calendar_entry.py
 │       ├── schemas/
@@ -947,9 +973,10 @@ This drops the `postgres_data` volume and recreates/reseeds the database.
 |---|---|
 | Email enumeration | `/auth/request-code` always returns the same generic message |
 | Brute-force login codes | Codes expire in 10 minutes; single-use; no detail on failure |
-| Session fixation | A new session token is created on every successful login |
-| XSS cookie theft | `HttpOnly` cookie; JS cannot read the token |
-| CSRF | `SameSite: Lax` cookie; state-changing endpoints use POST/PUT/DELETE (not GET) |
+| Token fixation | A new refresh token is created on every successful login |
+| Short-lived access tokens | JWT access tokens expire after 15 minutes; damage from token theft is time-bounded |
+| XSS token theft | Refresh token in `HttpOnly` cookie; access token lives only in JS memory (never persisted to `localStorage`) |
+| CSRF | `SameSite: Lax` cookie; refresh cookie is scoped to `Path: /auth/refresh`; state-changing endpoints use POST/PUT/DELETE (not GET) |
 | Encrypted field leakage | Encrypted column values never appear in API responses; decryption happens in the service layer |
 | Locked calendar leakage | Backend strips all sensitive fields before unlock date, regardless of auth level |
 | Unauthorised admin access | `require_admin` dependency enforced on all `/admin/*` routes |
@@ -959,7 +986,7 @@ This drops the `postgres_data` volume and recreates/reseeds the database.
 | Overly permissive CORS | `CORS_ORIGINS` env var explicitly lists allowed origins (only `http://localhost` in dev) |
 | Service network exposure | `backend` and `frontend` not bound to host; only `nginx` exposes port 80 |
 | IP address hard-coding | All inter-service references use Docker Compose service names resolved by the internal DNS |
-| Production hardening | `Secure` cookie flag; `ENVIRONMENT` env var gates dev-only behaviour |
+| Production hardening | `Secure` cookie flag on refresh token; `ENVIRONMENT` env var gates dev-only behaviour |
 
 ---
 
@@ -973,7 +1000,7 @@ The following sequence minimises blocked steps and ensures each phase is testabl
 4. **`init_db.py`** — `create_all` + call to seed function.
 5. **Seed data** — Insert admin, participants, beers, and year-scoped calendar entries idempotently, preserving prior years.
 6. **Encryption helpers** — `encrypt_field` / `decrypt_field` in `security.py`.
-7. **Auth service** — `request_code`, `verify_code`, session creation and revocation.
+7. **Auth service** — `request_code`, `verify_code`, refresh token creation and revocation.
 8. **Email sender** — `send_login_code` via SMTP (Mailpit in dev).
 9. **Session dependency** — `get_current_user`, `require_admin` in `auth/dependencies.py`.
 10. **Auth routes** — `/health`, `/auth/*`.

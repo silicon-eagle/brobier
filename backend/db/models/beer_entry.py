@@ -6,19 +6,20 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.models.base import Base
+from backend.db.models.base import Base
+from backend.db.utils import Table
 
 if TYPE_CHECKING:
-    from backend.models.calendar_entry import CalendarEntry
-    from backend.models.user import User
-    from backend.models.user_rating import UserRating
+    from backend.db.models.calendar_entry import CalendarEntry
+    from backend.db.models.user import User
+    from backend.db.models.user_rating import UserRating
 
 
 class BeerEntry(Base):
-    __tablename__ = 'beer_entries'
+    __tablename__ = Table.beer_entries
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey(f'{Table.users}.id'), nullable=False)
     beer_name_encrypted: Mapped[str] = mapped_column(String, nullable=False)
     brewery_encrypted: Mapped[str] = mapped_column(String, nullable=False)
     untappd_url_encrypted: Mapped[str | None] = mapped_column(String, nullable=True)

@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
+from backend.db.models.calendar_entry import CalendarEntry
+from backend.db.models.user import User, UserRole
 from backend.db.utils import Table
-from backend.models.calendar_entry import CalendarEntry
-from backend.models.user import User, UserRole
 
 
 def _is_users_seeded(db: Session) -> bool:

@@ -4,14 +4,15 @@ from typing import TYPE_CHECKING
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.models.base import Base
+from backend.db.models.base import Base
+from backend.db.utils import Table
 
 if TYPE_CHECKING:
-    from backend.models.beer_entry import BeerEntry
+    from backend.db.models.beer_entry import BeerEntry
 
 
 class CalendarEntry(Base):
-    __tablename__ = 'calendar_entries'
+    __tablename__ = Table.calendar_entries
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -21,7 +22,7 @@ class CalendarEntry(Base):
     title: Mapped[str] = mapped_column(String, nullable=False)
     content: Mapped[str] = mapped_column(String, nullable=False)
     image_url: Mapped[str | None] = mapped_column(String, nullable=True)
-    beer_entry_id: Mapped[int | None] = mapped_column(Integer, ForeignKey('beer_entries.id'), nullable=True, unique=True)
+    beer_entry_id: Mapped[int | None] = mapped_column(Integer, ForeignKey(f'{Table.beer_entries}.id'), nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 

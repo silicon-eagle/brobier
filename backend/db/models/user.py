@@ -7,13 +7,14 @@ from sqlalchemy import Boolean, DateTime, Enum, Index, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.models.base import Base
+from backend.db.models.base import Base
+from backend.db.utils import Table
 
 if TYPE_CHECKING:
-    from backend.models.beer_entry import BeerEntry
-    from backend.models.login_code import LoginCode
-    from backend.models.session import Session
-    from backend.models.user_rating import UserRating
+    from backend.db.models.beer_entry import BeerEntry
+    from backend.db.models.login_code import LoginCode
+    from backend.db.models.refresh_token import RefreshToken
+    from backend.db.models.user_rating import UserRating
 
 
 class UserRole(enum.StrEnum):
@@ -22,7 +23,7 @@ class UserRole(enum.StrEnum):
 
 
 class User(Base):
-    __tablename__ = 'users'
+    __tablename__ = Table.users
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String, nullable=False, unique=True)
@@ -34,7 +35,7 @@ class User(Base):
 
     beer_entries: Mapped[list[BeerEntry]] = relationship('BeerEntry', back_populates='user')
     login_codes: Mapped[list[LoginCode]] = relationship('LoginCode', back_populates='user')
-    sessions: Mapped[list[Session]] = relationship('Session', back_populates='user')
+    refresh_tokens: Mapped[list[RefreshToken]] = relationship('RefreshToken', back_populates='user')
     user_ratings: Mapped[list[UserRating]] = relationship('UserRating', back_populates='user')
 
     __table_args__ = (Index('ix_users_email', 'email'),)

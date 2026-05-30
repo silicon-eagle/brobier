@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from backend.api.routes.auth import router as auth_router
 from backend.db.engine import get_engine
 from backend.db.init_db import init_db
 from backend.db.utils import Table
@@ -18,6 +19,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator:
 
 
 app = FastAPI(title='Brobier Backend', lifespan=lifespan)
+app.include_router(auth_router)
 
 
 @app.get('/health')

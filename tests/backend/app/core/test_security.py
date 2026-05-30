@@ -6,14 +6,12 @@ import uuid
 from pathlib import Path
 
 import pytest
+from backend.auth.jwt import create_access_token, decode_access_token
+from backend.auth.tokens import generate_login_code, hash_token
 from backend.core.security import (
-    decode_jwt,
     decrypt_field,
     encrypt_field,
     generate_encryption_key,
-    generate_jwt,
-    generate_login_code,
-    hash_token,
 )
 from cryptography.fernet import Fernet
 
@@ -94,43 +92,43 @@ class TestGenerateLoginCode:
         assert len(codes) > 1
 
 
-class TestGenerateJwt:
+class TestCreateAccessToken:
     def test_returns_non_empty_string(self) -> None:
-        token = generate_jwt(uuid.uuid4(), 'user')
+        token = create_access_token(uuid.uuid4(), 'user')
         assert isinstance(token, str)
         assert len(token) > 0
 
     def test_payload_contains_subject_as_uuid_string(self) -> None:
         user_id = uuid.uuid4()
-        token = generate_jwt(user_id, 'user')
-        payload = decode_jwt(token)
+        token = create_access_token(user_id, 'user')
+        payload = decode_access_token(token)
         assert payload['sub'] == str(user_id)
 
     def test_payload_contains_role(self) -> None:
-        token = generate_jwt(uuid.uuid4(), 'admin')
-        payload = decode_jwt(token)
+        token = create_access_token(uuid.uuid4(), 'admin')
+        payload = decode_access_token(token)
         assert payload['role'] == 'admin'
 
     def test_payload_contains_iat_and_exp(self) -> None:
-        token = generate_jwt(uuid.uuid4(), 'user')
-        payload = decode_jwt(token)
+        token = create_access_token(uuid.uuid4(), 'user')
+        payload = decode_access_token(token)
         assert 'iat' in payload
         assert 'exp' in payload
         assert payload['exp'] > payload['iat']
 
     def test_different_users_produce_different_tokens(self) -> None:
-        token_a = generate_jwt(uuid.uuid4(), 'user')
-        token_b = generate_jwt(uuid.uuid4(), 'user')
+        token_a = create_access_token(uuid.uuid4(), 'user')
+        token_b = create_access_token(uuid.uuid4(), 'user')
         assert token_a != token_b
 
 
-class TestDecodeJwt:
+class TestDecodeAccessToken:
     def test_raises_on_invalid_token(self) -> None:
         with pytest.raises(ValueError, match='JWT token is invalid'):
-            decode_jwt('not.a.valid.token')
+            decode_access_token('not.a.valid.token')
 
     def test_raises_on_tampered_token(self) -> None:
-        token = generate_jwt(uuid.uuid4(), 'user')
+        token = create_access_token(uuid.uuid4(), 'user')
         tampered = token[:-4] + 'XXXX'
         with pytest.raises(ValueError, match='JWT token is invalid'):
-            decode_jwt(tampered)
+            decode_access_token(tampered)

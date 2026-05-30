@@ -8,7 +8,7 @@ _DATABASE_URL = 'postgresql+psycopg://<user>:<password>@brobier-db-dev:5432/brob
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', case_sensitive=True)
+    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', case_sensitive=True, extra='ignore')
     db_host: str = Field(default='localhost', alias='DB_HOST')
     db_name: str = Field(default='brobier_dev', alias='DB_NAME')
     db_port: str = Field(default='5432', alias='DB_PORT')
@@ -19,7 +19,9 @@ class Settings(BaseSettings):
 
     jwt_secret: str = Field(default='a cold beer a day keeps the doctor away, but two keeps the bugs at bay', alias='JWT_SECRET')
 
-    session_expire_seconds: int = Field(default=604800, alias='SESSION_EXPIRE_SECONDS')
+    jwt_access_expire_minutes: int = Field(default=15, alias='JWT_ACCESS_EXPIRE_MINUTES')
+    jwt_refresh_expire_days: int = Field(default=7, alias='JWT_REFRESH_EXPIRE_DAYS')
+    jwt_refresh_cookie_name: str = Field(default='brobier_refresh', alias='JWT_REFRESH_COOKIE_NAME')
 
     smtp_host: str = Field(default='mailpit', alias='SMTP_HOST')
     smtp_port: int = Field(default=1025, alias='SMTP_PORT')

@@ -6,5 +6,5 @@ class Table(enum.StrEnum):
     beer_entries = 'beer_entries'
     calendar_entries = 'calendar_entries'
     login_codes = 'login_codes'
-    sessions = 'sessions'
+    refresh_tokens = 'refresh_tokens'
     user_ratings = 'user_ratings'

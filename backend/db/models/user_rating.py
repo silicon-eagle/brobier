@@ -6,19 +6,20 @@ from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Integer, St
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.models.base import Base
+from backend.db.models.base import Base
+from backend.db.utils import Table
 
 if TYPE_CHECKING:
-    from backend.models.beer_entry import BeerEntry
-    from backend.models.user import User
+    from backend.db.models.beer_entry import BeerEntry
+    from backend.db.models.user import User
 
 
 class UserRating(Base):
-    __tablename__ = 'user_ratings'
+    __tablename__ = Table.user_ratings
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
-    beer_entry_id: Mapped[int] = mapped_column(Integer, ForeignKey('beer_entries.id'), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey(f'{Table.users}.id'), nullable=False)
+    beer_entry_id: Mapped[int] = mapped_column(Integer, ForeignKey(f'{Table.beer_entries}.id'), nullable=False)
     rating: Mapped[float | int] = mapped_column(Float, nullable=False)
     comment: Mapped[str | None] = mapped_column(String, nullable=True)
     drank_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

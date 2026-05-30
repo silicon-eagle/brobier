@@ -1,14 +1,7 @@
 from __future__ import annotations
 
-import hashlib
-import random
-import string
-import uuid
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from uuid import UUID
 
-import jwt
 from cryptography.fernet import Fernet, InvalidToken
 
 from backend.core.config import get_settings
@@ -42,31 +35,3 @@ def decrypt_field(value: str) -> str:
         return _get_fernet().decrypt(value.encode()).decode()
     except InvalidToken as e:
         raise ValueError('Failed to decrypt field: token is invalid or tampered') from e
-
-
-def hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
-def generate_login_code(length: int = 6) -> str:
-    return ''.join(random.choices(string.digits, k=length))
-
-
-def generate_jwt(user_id: uuid.UUID, role: str) -> str:
-    settings = get_settings()
-    payload = {
-        'sub': str(user_id),
-        'role': role,
-        'iat': datetime.now(UTC),
-        'exp': datetime.now(UTC) + timedelta(seconds=settings.session_expire_seconds),
-    }
-    return jwt.encode(payload, settings.jwt_secret, algorithm='HS256')
-
-
-def decode_jwt(token: str) -> dict:
-    try:
-        return jwt.decode(token, get_settings().jwt_secret, algorithms=['HS256'])
-    except jwt.ExpiredSignatureError as e:
-        raise ValueError('JWT token has expired') from e
-    except jwt.InvalidTokenError as e:
-        raise ValueError('JWT token is invalid') from e

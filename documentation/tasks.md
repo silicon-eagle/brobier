@@ -16,12 +16,12 @@ Task ID format:
   - **Done when:** `backend/Dockerfile` uses `python:3.14-slim`, runs `uv sync --frozen`, and starts uvicorn with `--reload`. `docker compose build backend` completes without errors.
 - [x] `BE-1.3` Add `pyproject.toml` and `uv.lock` with uv-managed dependencies for FastAPI, SQLAlchemy, psycopg, cryptography, pytest, pytest-asyncio, Ruff, ty.
   - **Done when:** `uv sync --frozen` installs all listed packages without errors, and `uv run ruff check .` and `uv run ty check` can be invoked.
-- [x] `BE-1.4` Add backend `.env.example` with DB, session, encryption, SMTP, CORS, environment settings.
-  - **Done when:** `backend/.env.example` contains all keys from spec section 4: `DATABASE_URL`, `SESSION_COOKIE_NAME`, `SESSION_SECRET`, `SESSION_EXPIRE_SECONDS`, `BEER_ENCRYPTION_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`, `SMTP_USE_TLS`, `LOGIN_CODE_EXPIRE_MINUTES`, `CORS_ORIGINS`, `ENVIRONMENT`.
+- [x] `BE-1.4` Add backend `.env.example` with DB, JWT, encryption, SMTP, CORS, environment settings.
+  - **Done when:** `backend/.env.example` contains all keys from spec section 4: `DATABASE_URL`, `JWT_SECRET`, `JWT_ACCESS_EXPIRE_MINUTES`, `JWT_REFRESH_EXPIRE_DAYS`, `JWT_REFRESH_COOKIE_NAME`, `BEER_ENCRYPTION_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`, `SMTP_USE_TLS`, `LOGIN_CODE_EXPIRE_MINUTES`, `CORS_ORIGINS`, `ENVIRONMENT`.
 
 ### 2. Configuration and Database Foundation
 - [x] `BE-2.1` Implement `app/core/config.py` with Pydantic Settings and env parsing.
-  - **Done when:** `Settings` reads all `.env.example` keys via `pydantic-settings`. Importing `from app.core.config import settings` works in any module. A missing required key raises a clear `ValidationError` at startup.
+  - **Done when:** `Settings` reads all `.env.example` keys via `pydantic-settings`. Importing `from app.core.config import settings` works in any module. A missing required key raises a clear `ValidationError` at startup. JWT settings (`JWT_SECRET`, `JWT_ACCESS_EXPIRE_MINUTES`, `JWT_REFRESH_EXPIRE_DAYS`, `JWT_REFRESH_COOKIE_NAME`) are present and typed correctly.
 - [x] `BE-2.2` Implement `app/db/session.py` with engine setup and `get_db` dependency.
   - **Done when:** `engine` is created from `settings.DATABASE_URL`. `get_db` is an async-compatible FastAPI dependency that yields a `Session` and closes it on completion. The module imports without error.
 - [x] `BE-2.4` Add `GET /health` endpoint.
@@ -32,8 +32,8 @@ Task ID format:
   - **Done when:** Model has all columns from spec 5.1: `id` (int PK), `email` (unique, indexed, not null), `display_name` (not null), `role` (enum `"user"/"admin"`, default `"user"`), `is_active` (bool, default `True`), `created_at`, `updated_at`. `Base.metadata.create_all` creates the `users` table with the correct schema.
 - [x] `BE-3.2` Implement `LoginCode` model in `app/models/login_code.py`.
   - **Done when:** Model has all columns from spec 5.2: `id` (int PK), `user_id` (FK → User), `code_hash` (not null), `expires_at` (not null), `used_at` (nullable), `created_at`, `updated_at`. The FK to `users` is enforced by the database.
-- [x] `BE-3.3` Implement `Session` model in `app/models/session.py`.
-  - **Done when:** Model has all columns from spec 5.3: `id` (UUID PK), `user_id` (FK → User), `session_token_hash` (not null, indexed), `expires_at` (not null), `created_at`, `last_seen_at`, `revoked_at` (nullable). The FK to `users` is enforced by the database.
+- [x] `BE-3.3` Implement `RefreshToken` model in `app/models/refresh_token.py`.
+  - **Done when:** Model has all columns from spec 5.3: `id` (int PK), `user_id` (UUID FK → User), `token_hash` (not null, indexed), `expires_at` (not null), `revoked_at` (nullable), `created_at` (not null, default utcnow). The FK to `users` is enforced by the database.
 - [x] `BE-3.4` Implement `BeerEntry` model in `app/models/beer_entry.py`.
   - **Done when:** Model has all columns: `id` (int PK), `user_id` (FK → User), `beer_name_encrypted` (not null), `brewery_encrypted` (not null), `untappd_url_encrypted` (nullable), `comment_encrypted` (nullable), `bought_from` (not null), `bought_at` (not null datetime), `created_at`, `updated_at`.
 - [x] `BE-3.5` Implement `CalendarEntry` model in `app/models/calendar_entry.py`.
@@ -41,7 +41,7 @@ Task ID format:
 - [x] `BE-3.6` Add constraints: `UNIQUE(year, day)` and `UNIQUE(beer_entry_id)` on `CalendarEntry`.
   - **Done when:** Attempting to insert two `CalendarEntry` rows with the same `(year, day)` raises a unique constraint error. Attempting to assign the same `beer_entry_id` to two rows also raises a unique constraint error.
 - [x] `BE-3.7` Validate model relationships and FK directions against the spec diagram.
-  - **Done when:** All six FKs from spec section 5 exist: `BeerEntry.user_id → User.id`, `LoginCode.user_id → User.id`, `Session.user_id → User.id`, `CalendarEntry.beer_entry_id → BeerEntry.id`, `UserRating.user_id → User.id`, `UserRating.beer_entry_id → BeerEntry.id`. SQLAlchemy `relationship()` attributes are navigable in both directions where relevant. A quick `pytest` or `python -c` smoke test confirms the ORM joins work.
+  - **Done when:** All six FKs from spec section 5 exist: `BeerEntry.user_id → User.id`, `LoginCode.user_id → User.id`, `RefreshToken.user_id → User.id`, `CalendarEntry.beer_entry_id → BeerEntry.id`, `UserRating.user_id → User.id`, `UserRating.beer_entry_id → BeerEntry.id`. SQLAlchemy `relationship()` attributes are navigable in both directions where relevant. A quick `pytest` or `python -c` smoke test confirms the ORM joins work.
 - [x] `BE-3.8` Implement `UserRating` model in `app/models/user_rating.py`.
   - **Done when:** Model has all columns from spec 5.6: `id` (int PK), `user_id` (FK → User), `beer_entry_id` (FK → BeerEntry), `rating` (float, not null, DB check `1.0 ≤ rating ≤ 5.0`), `comment` (nullable), `drank_at` (nullable datetime), `created_at`, `updated_at`. A `UNIQUE(user_id, beer_entry_id)` constraint prevents a user from rating the same beer twice.
 
@@ -54,42 +54,34 @@ Task ID format:
   - **Done when:** `run_seed(db)` checks whether the `users` table is empty before inserting. Running it twice against the same database produces identical data with no duplicate rows and no exception.
 - [x] `BE-4.4` Seed admin + participant users.
   - **Done when:** After seeding, the database contains exactly these 5 users: `admin@brobier.local` (role=admin), `alice@brobier.local`, `bob@brobier.local`, `carol@brobier.local` (all role=user, is_active=true), and `dave@brobier.local` (role=user, is_active=false).
-- [] `BE-4.5` Seed sample beer entries for active users.
-  - **Done when:** Alice, Bob, and Carol each have at least 3 beer entries in the database after seeding. All `beer_name_encrypted` and `brewery_encrypted` columns contain valid Fernet ciphertext (not plaintext).
-- [ ] `BE-4.6` Seed 24 calendar rows for target year (preserve prior-year history, only fill missing rows).
-  - **Done when:** After seeding against a fresh database, there are exactly 24 `CalendarEntry` rows for the current UTC year (days 1–24), each with `unlock_date` set to December `day` of that year at 08:00 UTC. Running the seed again does not add duplicate rows. If rows for a prior year already exist they are unchanged.
-- [ ] `BE-4.7` Assign sample beers to early calendar days for demo.
-  - **Done when:** After seeding, calendar entries for days 1–5 of the seeded year each have a non-null `beer_entry_id` pointing to a valid beer entry. No single beer entry is assigned to more than one day.
 
 ### 5. Security and Encryption
-- [ ] `BE-5.1` Implement `app/core/security.py` — `encrypt_field` and `decrypt_field` via Fernet.
+- [x] `BE-5.1` Implement `app/core/security.py` — `encrypt_field` and `decrypt_field` via Fernet.
   - **Done when:** `encrypt_field("hello")` returns a non-empty string that is not `"hello"`. `decrypt_field(encrypt_field("hello"))` returns `"hello"`. Both return `None` when given `None`. Both raise a clear application error when `BEER_ENCRYPTION_KEY` is missing or the ciphertext is tampered with.
-- [ ] `BE-5.2` Implement login code + session token hashing helpers in `app/core/security.py`.
-  - **Done when:** `hash_token(raw)` returns the SHA-256 hex digest of `raw`. `generate_login_code()` returns a 6-character string of decimal digits (`"000000"`–`"999999"`). Both functions are covered by unit tests in `BE-8.2`.
-- [ ] `BE-5.3` Ensure encrypted beer fields are never exposed raw in responses.
-  - **Done when:** `GET /beers/me`, `POST /beers`, `PUT /beers/{id}`, and `GET /admin/beers` all return `beer_name`, `brewery`, `untappd_url`, `comment` as plaintext (decrypted). No response body anywhere in the API contains a key ending in `_encrypted`. Verified by inspecting the Pydantic response schemas and confirmed in the API tests for `BE-8.3`.
-- [ ] `BE-5.4` Add runtime errors for missing/invalid encryption key and decryption failures.
-  - **Done when:** Starting the app without `BEER_ENCRYPTION_KEY` set raises a startup error with a clear message. Passing corrupted ciphertext to `decrypt_field` raises an `HTTPException(500)` (or a custom app error) rather than an unhandled exception. Both scenarios are covered by unit tests.
+- [x] `BE-5.2` Implement JWT and token hashing helpers in `app/core/security.py`.
+  - **Done when:** `hash_token(raw)` returns the SHA-256 hex digest of `raw`. `generate_login_code()` returns a 6-character string of decimal digits (`"000000"`–`"999999"`). `create_access_token(user_id)` returns a signed HS256 JWT with `sub`, `exp`, and `iat` claims, valid for `JWT_ACCESS_EXPIRE_MINUTES`. `decode_access_token(token)` returns the payload dict or raises on invalid/expired tokens. All functions are covered by unit tests in `BE-8.2`.
 
-### 6. Authentication and Session Management
+### 6. Authentication and JWT Management
 - [ ] `BE-6.1` Implement `request_code` flow in `app/services/auth_service.py` and route `POST /auth/request-code`.
   - **Done when:** Posting a registered active email generates a 6-digit `LoginCode` row (with hashed code, expiry = now + `LOGIN_CODE_EXPIRE_MINUTES`) and triggers an email send. Posting any other email returns the same `200 {"message": "If that email is registered, a code has been sent."}` response — the response body is identical regardless of whether the email exists.
 - [ ] `BE-6.2` Implement SMTP mail sender in `app/email/sender.py`.
   - **Done when:** `send_login_code_email(to, code)` sends an email via the configured SMTP server. In the Docker dev environment, the email appears in Mailpit at `http://localhost:8025` after triggering `POST /auth/request-code` with a valid email.
 - [ ] `BE-6.3` Implement `verify_code` flow — route `POST /auth/verify-code`.
-  - **Done when:** A valid (unexpired, unused) code + matching email returns `200 {"user": {id, display_name, role}}` and sets an `HttpOnly` session cookie. The `LoginCode.used_at` is set to now. A second attempt with the same code returns `401`. An expired code returns `401`. The response body for invalid codes is always `{"detail": "Invalid or expired code."}`.
-- [ ] `BE-6.4` Implement `logout` flow — route `POST /auth/logout`.
-  - **Done when:** Calling `POST /auth/logout` with a valid session cookie sets `Session.revoked_at = now` in the database and clears the session cookie. A subsequent `GET /auth/me` with the cleared cookie returns `401`.
-- [ ] `BE-6.5` Implement `get_current_user` FastAPI dependency in `app/auth/dependencies.py`.
-  - **Done when:** The dependency reads the raw token from the session cookie, hashes it, looks up the matching non-revoked, non-expired `Session` row, updates `last_seen_at`, and returns the linked `User`. Returns `401` if the cookie is absent, the session is revoked, or the session is expired.
-- [ ] `BE-6.6` Implement `require_admin` FastAPI dependency in `app/auth/dependencies.py`.
-  - **Done when:** The dependency wraps `get_current_user` and additionally checks `user.role == "admin"`. Returns `403` if the user is authenticated but not an admin. Any endpoint using `require_admin` is inaccessible to a regular user session (confirmed in `BE-8.4`).
-- [ ] `BE-6.7` Enforce cookie flags and expiry by environment.
-  - **Done when:** In development (`ENVIRONMENT=development`), the session cookie is set with `HttpOnly=True`, `SameSite=Lax`, `Secure=False`, and `Max-Age=SESSION_EXPIRE_SECONDS`. In production (`ENVIRONMENT=production`), the same cookie is set with `Secure=True`. Verified by inspecting the `Set-Cookie` header in the response from `POST /auth/verify-code`.
+  - **Done when:** A valid (unexpired, unused) code + matching email: marks `LoginCode.used_at = now`, generates a raw refresh token, stores its SHA-256 hash as a `RefreshToken` row (expiry = now + `JWT_REFRESH_EXPIRE_DAYS`), issues a JWT access token (15-minute expiry), sets the raw refresh token as an `HttpOnly` cookie (`JWT_REFRESH_COOKIE_NAME`, `Path: /auth/refresh`), and returns `200 {"access_token": <jwt>, "token_type": "bearer", "user": {id, display_name, role}}`. A second attempt with the same code returns `401`. An expired code returns `401`. The response body for invalid codes is always `{"detail": "Invalid or expired code."}`.
+- [ ] `BE-6.4` Implement `refresh` flow — route `POST /auth/refresh`.
+  - **Done when:** A valid (non-revoked, non-expired) refresh token cookie: hashes the raw cookie value, finds the matching `RefreshToken` row, and returns `200 {"access_token": <new_jwt>, "token_type": "bearer"}`. Missing, revoked, or expired refresh token returns `401`. The old `RefreshToken` row is **not** rotated on refresh (stateless re-use within expiry window is acceptable).
+- [ ] `BE-6.5` Implement `logout` flow — route `POST /auth/logout`.
+  - **Done when:** Calling `POST /auth/logout` with a valid refresh cookie sets `RefreshToken.revoked_at = now` in the database and clears the refresh cookie. A subsequent `POST /auth/refresh` with the cleared cookie returns `401`.
+- [ ] `BE-6.6` Implement `get_current_user` FastAPI dependency in `app/auth/dependencies.py`.
+  - **Done when:** The dependency reads the JWT from the `Authorization: Bearer <token>` header, decodes and verifies it using `JWT_SECRET`, extracts `sub` (user id), loads the `User` from the database, and returns it. Returns `401` if the header is absent, the token is malformed, expired, or the user no longer exists.
+- [ ] `BE-6.7` Implement `require_admin` FastAPI dependency in `app/auth/dependencies.py`.
+  - **Done when:** The dependency wraps `get_current_user` and additionally checks `user.role == "admin"`. Returns `403` if the user is authenticated but not an admin. Any endpoint using `require_admin` is inaccessible to a regular user (confirmed in `BE-8.4`).
+- [ ] `BE-6.8` Enforce refresh cookie flags by environment.
+  - **Done when:** In development (`ENVIRONMENT=development`), the refresh cookie is set with `HttpOnly=True`, `SameSite=Lax`, `Secure=False`, `Path=/auth/refresh`, and `Max-Age` matching `JWT_REFRESH_EXPIRE_DAYS` in seconds. In production (`ENVIRONMENT=production`), the same cookie is set with `Secure=True`. Verified by inspecting the `Set-Cookie` header in the response from `POST /auth/verify-code`.
 
 ### 7. Schemas and API Routes
-- [ ] `BE-7.1` Implement auth schemas and routes (`/auth/request-code`, `/auth/verify-code`, `/auth/logout`, `/auth/me`).
-  - **Done when:** All four auth endpoints are registered on the FastAPI app and respond with the exact shapes described in spec section 8.1. Pydantic schemas live in `app/schemas/auth.py`. Route handlers are thin (input validation + service call + return).
+- [ ] `BE-7.1` Implement auth schemas and routes (`/auth/request-code`, `/auth/verify-code`, `/auth/refresh`, `/auth/logout`, `/auth/me`).
+  - **Done when:** All five auth endpoints are registered on the FastAPI app and respond with the exact shapes described in spec section 8.1. Pydantic schemas live in `app/schemas/auth.py`. Route handlers are thin (input validation + service call + return).
 - [ ] `BE-7.2` Implement beer schemas and routes (`GET /beers/me`, `POST /beers`, `PUT /beers/{beer_id}`, `DELETE /beers/{beer_id}`).
   - **Done when:** All four endpoints are registered and respond with the shapes from spec section 8.2. `POST /beers` returns `201`. `DELETE /beers/{id}` returns `204`. Schemas live in `app/schemas/beer.py`. Business logic (encrypt, decrypt, ownership check) is in `app/services/beer_service.py`, not the route handler.
 - [ ] `BE-7.2a` Implement user rating routes (`POST /beers/{beer_id}/ratings`, `PUT /beers/{beer_id}/ratings/me`, `DELETE /beers/{beer_id}/ratings/me`).
@@ -115,12 +107,12 @@ Task ID format:
 ### 8. Testing, Linting, and Verification (Backend)
 - [ ] `BE-8.1` Configure pytest + pytest-asyncio.
   - **Done when:** `uv run pytest` in the `backend/` directory discovers and runs at least a placeholder test file without configuration errors. `asyncio_mode = "auto"` is set in `pyproject.toml` so async test functions run without manual event-loop setup.
-- [ ] `BE-8.2` Add unit tests for security helpers (hashing, encryption/decryption).
-  - **Done when:** Tests cover: `encrypt_field` + `decrypt_field` round-trip; `encrypt_field(None)` returns `None`; `decrypt_field` raises on tampered ciphertext; `hash_token` is deterministic for the same input; `generate_login_code` returns a 6-digit decimal string. All tests pass with `uv run pytest tests/unit/test_security.py`.
+- [ ] `BE-8.2` Add unit tests for security helpers (hashing, encryption/decryption, JWT).
+  - **Done when:** Tests cover: `encrypt_field` + `decrypt_field` round-trip; `encrypt_field(None)` returns `None`; `decrypt_field` raises on tampered ciphertext; `hash_token` is deterministic for the same input; `generate_login_code` returns a 6-digit decimal string; `create_access_token` returns a decodable JWT with the correct `sub`; `decode_access_token` raises on expired or tampered tokens. All tests pass with `uv run pytest tests/unit/test_security.py`.
 - [ ] `BE-8.3` Add service tests for auth, beer ownership rules, and calendar unlock logic.
   - **Done when:** Tests cover: requesting a code for an unknown email returns the same message as a known email; a used code cannot be reused; a non-owner cannot edit/delete a beer; a beer assigned to a calendar entry cannot be edited or deleted. All tests pass.
-- [ ] `BE-8.4` Add API tests for auth/session lifecycle and admin authorization.
-  - **Done when:** Tests cover: full login → verify → `GET /auth/me` → logout → `GET /auth/me` returns 401; a regular-user session receives `403` on any `/admin/*` route; an unauthenticated request to a protected route receives `401`. All tests pass.
+- [ ] `BE-8.4` Add API tests for auth/JWT lifecycle and admin authorization.
+  - **Done when:** Tests cover: full login → verify-code (receives access token + refresh cookie) → `GET /auth/me` with Bearer token → logout → `POST /auth/refresh` returns `401`; `POST /auth/refresh` with valid cookie returns new access token; a regular-user JWT receives `403` on any `/admin/*` route; an unauthenticated request (no Bearer token) to a protected route receives `401`. All tests pass.
 - [ ] `BE-8.5` Add tests for year/history behavior (`year` defaults, listing years, preserving old rows).
   - **Done when:** Tests cover: `GET /calendar` with no `year` param returns data for the current UTC year; `GET /calendar/years` lists all seeded years; a locked entry (future `unlock_date`) returns only the locked schema fields; an unlocked entry returns full content. Running the seed function twice does not duplicate rows. All tests pass.
 - [ ] `BE-8.6` Run Ruff lint + format checks.
@@ -141,13 +133,13 @@ Task ID format:
   - **Done when:** `frontend/Dockerfile` uses `node:24-alpine`, runs `npm install`, and starts `npm run dev -- --host`. `frontend/.env.example` contains `VITE_API_BASE_URL=http://localhost/api`. `docker compose build frontend` completes without errors.
 
 ### 2. API Client and Types
-- [ ] `FE-2.1` Implement `src/api/client.ts` base fetch wrapper with `credentials: "include"`.
-  - **Done when:** `client.ts` exports a typed `apiFetch(path, options?)` function that prefixes all requests with `VITE_API_BASE_URL`, sets `credentials: "include"`, and returns the parsed JSON body. Non-2xx responses throw an `ApiError` (see `FE-2.2`). No raw `fetch` calls exist outside this module.
+- [ ] `FE-2.1` Implement `src/api/client.ts` base fetch wrapper with JWT and refresh logic.
+  - **Done when:** `client.ts` exports a typed `apiFetch(path, options?)` function that prefixes all requests with `VITE_API_BASE_URL`, attaches the in-memory access token as `Authorization: Bearer <token>` when present, sets `credentials: "include"` so the refresh cookie is forwarded to `/auth/refresh`, and returns the parsed JSON body. On a `401` response it automatically calls `POST /auth/refresh` once to obtain a new access token and retries the original request. Non-2xx responses that cannot be recovered throw an `ApiError` (see `FE-2.2`). No raw `fetch` calls exist outside this module.
 - [ ] `FE-2.2` Implement typed `ApiError` handling for non-2xx responses.
   - **Done when:** An `ApiError` class exists in `src/api/errors.ts` (or `client.ts`) with at least `status: number` and `message: string` properties. Callers can use `instanceof ApiError` to detect API failures. A 401 response from the server produces an `ApiError` with `status === 401`.
 - [ ] `FE-2.3` Implement API modules in `src/api/`.
   - **Done when:** Each module exports typed async functions wrapping `apiFetch`:
-    - `FE-2.3a` `auth.ts` — `requestCode(email)`, `verifyCode(email, code)`, `logout()`, `getMe()`.
+    - `FE-2.3a` `auth.ts` — `requestCode(email)`, `verifyCode(email, code)`, `refresh()`, `logout()`, `getMe()`.
     - `FE-2.3b` `beers.ts` — `getMyBeers()`, `createBeer(data)`, `updateBeer(id, data)`, `deleteBeer(id)`.
     - `FE-2.3c` `leaderboard.ts` — `getLeaderboard()`.
     - `FE-2.3d` `calendar.ts` — `getCalendar(year?)`, `getCalendarDay(year, day)`, `getCalendarYears()`.
@@ -156,16 +148,16 @@ Task ID format:
   - **Done when:** Types cover all API response shapes from spec section 8.4: `User`, `BeerEntryOut`, `AdminBeerEntryOut`, `CalendarEntryOut` (locked and unlocked variants using a discriminated union on `is_locked`), `AdminCalendarEntryOut`, `LeaderboardEntry`. TypeScript compilation (`npm run build` or `tsc --noEmit`) passes with no type errors.
 
 ### 3. Authentication State and Route Protection
-- [ ] `FE-3.1` Implement `AuthContext` with startup session hydration (`GET /auth/me`).
-  - **Done when:** On app load, `AuthContext` calls `getMe()`. If successful, `user` is set in context. If the call returns 401, `user` is `null`. The loading state is exposed so pages can show a spinner before auth is resolved. Context is provided at the root of the app.
+- [ ] `FE-3.1` Implement `AuthContext` with startup token hydration (`POST /auth/refresh`).
+  - **Done when:** On app load, `AuthContext` calls `refresh()`. If successful, the returned access token is stored in memory and `user` is set by immediately calling `getMe()`. If the call returns 401 (no valid refresh cookie), `user` is `null` and the access token is cleared. The loading state is exposed so pages can show a spinner before auth is resolved. Context is provided at the root of the app.
 - [ ] `FE-3.2` Implement `useAuth` hook.
-  - **Done when:** `useAuth()` returns `{ user, isLoading, login, logout }`. `user` is the current `User` object or `null`. Calling `logout()` calls `auth.logout()`, clears the context user, and navigates to `/login`.
+  - **Done when:** `useAuth()` returns `{ user, isLoading, login, logout }`. `user` is the current `User` object or `null`. `login(accessToken, user)` stores the token in memory and sets the context user. Calling `logout()` calls `auth.logout()`, clears the in-memory token and context user, and navigates to `/login`.
 - [ ] `FE-3.3` Implement `ProtectedRoute`.
   - **Done when:** A component that wraps child routes. If `isLoading` is true, renders a loading state. If `user` is `null` after loading, redirects to `/login` with the intended path preserved in location state. Authenticated users render the children normally.
 - [ ] `FE-3.4` Implement `AdminRoute`.
   - **Done when:** Wraps `ProtectedRoute`. If the authenticated user's `role !== "admin"`, redirects to `/` instead of rendering children. Regular-user sessions navigating to `/admin/*` are redirected to `/`.
 - [ ] `FE-3.5` Ensure logout clears client auth state and redirects appropriately.
-  - **Done when:** Clicking logout calls `useAuth().logout()`, the session cookie is cleared by the server, `user` becomes `null` in context, and the browser navigates to `/login`. A subsequent `GET /auth/me` (e.g. on page refresh) returns 401 and the user stays on `/login`.
+  - **Done when:** Clicking logout calls `useAuth().logout()`, the refresh token cookie is revoked by the server and cleared, the in-memory access token is discarded, `user` becomes `null` in context, and the browser navigates to `/login`. A subsequent `POST /auth/refresh` (e.g. on page refresh) returns `401` and the user stays on `/login`.
 
 ### 4. Layout and Navigation
 - [ ] `FE-4.1` Build `AppLayout` with authenticated navigation.
@@ -217,7 +209,7 @@ Task ID format:
 - [ ] `FE-8.1` Configure Vitest + React Testing Library.
   - **Done when:** `npm test` runs Vitest and discovers test files. A placeholder test (e.g. `expect(true).toBe(true)`) passes. `@testing-library/react` and `@testing-library/user-event` are installed and importable.
 - [ ] `FE-8.2` Add unit tests for API client error handling and auth context behavior.
-  - **Done when:** Tests cover: a non-2xx fetch response causes `apiFetch` to throw an `ApiError` with the correct `status`; `AuthContext` sets `user` to `null` when `getMe()` returns 401; `AuthContext` sets `user` to the returned object when `getMe()` succeeds. All tests pass with `npm test`.
+  - **Done when:** Tests cover: a non-2xx fetch response causes `apiFetch` to throw an `ApiError` with the correct `status`; a `401` response triggers a `refresh()` call and retries the request; `AuthContext` sets `user` to `null` when `refresh()` returns 401; `AuthContext` sets `user` to the correct object when `refresh()` + `getMe()` succeed. All tests pass with `npm test`.
 - [ ] `FE-8.3` Add component tests for protected routes and critical forms.
   - **Done when:** Tests cover: `ProtectedRoute` redirects to `/login` when `user` is `null`; `AdminRoute` redirects to `/` when the user's role is `"user"`; `BeerForm` shows a validation error when submitted with an empty `beer_name` field. All tests pass.
 - [ ] `FE-8.4` Add page tests for login flow and year-aware calendar rendering.
@@ -230,8 +222,8 @@ Task ID format:
 ## Suggested Execution Milestones
 - [ ] `MS-A` Milestone A: Infra + backend models + seed + health endpoint.
   - **Done when:** `docker compose up --build` starts cleanly, `GET /api/health` returns `{"status": "ok"}`, all five tables exist in the database, and seed data is present (5 users, beers for Alice/Bob/Carol, 24 calendar rows for current year).
-- [ ] `MS-B` Milestone B: Auth/session complete end-to-end.
-  - **Done when:** A seeded user can request a login code (visible in Mailpit), submit it to `POST /auth/verify-code`, receive a session cookie, call `GET /auth/me` successfully, and log out. A second `GET /auth/me` after logout returns 401.
+- [ ] `MS-B` Milestone B: Auth/JWT complete end-to-end.
+  - **Done when:** A seeded user can request a login code (visible in Mailpit), submit it to `POST /auth/verify-code` (receives JWT access token + refresh cookie), call `GET /auth/me` with the Bearer token, call `POST /auth/refresh` to obtain a new access token, and log out. A subsequent `POST /auth/refresh` after logout returns 401.
 - [ ] `MS-C` Milestone C: Beer CRUD + leaderboard.
   - **Done when:** An authenticated user can create, update, and delete their own beer entries via the API. `GET /leaderboard` returns active users ranked by beer count. Ownership and calendar-assignment guardrails return the correct 403/409 status codes.
 - [ ] `MS-D` Milestone D: Year-aware calendar + history endpoints.

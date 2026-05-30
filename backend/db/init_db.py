@@ -1,10 +1,9 @@
 from sqlalchemy import Engine, inspect
 
-import backend.models  # noqa: F401 — ensures all models are registered with Base.metadata
 from backend.core.config import get_settings
-from backend.models.base import Base
+from backend.db.models.base import Base
 
-EXPECTED_TABLES = {'user', 'beer_entry', 'calendar_entry', 'login_code', 'session', 'user_rating'}
+EXPECTED_TABLES = {'users', 'beer_entries', 'calendar_entries', 'login_codes', 'refresh_tokens', 'user_ratings'}
 
 
 def tables_exist(engine: Engine) -> bool:
