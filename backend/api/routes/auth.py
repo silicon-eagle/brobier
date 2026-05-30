@@ -1,10 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from sqlalchemy.orm import Session
 
 from backend.auth.dependencies import get_current_user
 from backend.core.config import get_settings
 from backend.db.models.user import User
-from backend.db.session import get_db
 from backend.schemas.auth import (
     MessageResponse,
     RequestCodeIn,
@@ -39,15 +37,15 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 
 @router.post('/request-code', response_model=MessageResponse)
-def request_code(body: RequestCodeIn, db: Session = Depends(get_db)) -> MessageResponse:
-    auth_service.request_code(body.email, db)
+def request_code(body: RequestCodeIn) -> MessageResponse:
+    auth_service.request_code(body.email)
     return MessageResponse(message=_CODE_SENT_MESSAGE)
 
 
 @router.post('/verify-code', response_model=VerifyCodeResponse)
-def verify_code(body: VerifyCodeIn, response: Response, db: Session = Depends(get_db)) -> VerifyCodeResponse:
+def verify_code(body: VerifyCodeIn, response: Response) -> VerifyCodeResponse:
     try:
-        access_token, raw_refresh_token, user = auth_service.verify_code(body.email, body.code, db)
+        access_token, raw_refresh_token, user = auth_service.verify_code(body.email, body.code)
     except ValueError:
         raise HTTPException(status_code=401, detail='Invalid or expired code.')
 
@@ -59,14 +57,14 @@ def verify_code(body: VerifyCodeIn, response: Response, db: Session = Depends(ge
 
 
 @router.post('/refresh', response_model=TokenResponse)
-def refresh_token(request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+def refresh_token(request: Request) -> TokenResponse:
     settings = get_settings()
     raw_token = request.cookies.get(settings.jwt_refresh_cookie_name)
     if not raw_token:
         raise HTTPException(status_code=401, detail='Refresh token missing.')
 
     try:
-        access_token = auth_service.refresh(raw_token, db)
+        access_token = auth_service.refresh(raw_token)
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
 
@@ -74,11 +72,11 @@ def refresh_token(request: Request, db: Session = Depends(get_db)) -> TokenRespo
 
 
 @router.post('/logout', response_model=MessageResponse)
-def logout(request: Request, response: Response, db: Session = Depends(get_db)) -> MessageResponse:
+def logout(request: Request, response: Response) -> MessageResponse:
     settings = get_settings()
     raw_token = request.cookies.get(settings.jwt_refresh_cookie_name)
     if raw_token:
-        auth_service.logout(raw_token, db)
+        auth_service.logout(raw_token)
     _clear_refresh_cookie(response)
     return MessageResponse(message='Logged out.')
 

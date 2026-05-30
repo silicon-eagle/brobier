@@ -4,11 +4,11 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.auth.jwt import decode_access_token
+from backend.db.engine import get_engine
 from backend.db.models.user import User, UserRole
-from backend.db.session import get_db
 
 
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+def get_current_user(request: Request) -> User:
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
         raise HTTPException(status_code=401, detail='Missing or invalid Authorization header.')
@@ -23,7 +23,9 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if not user_id_str:
         raise HTTPException(status_code=401, detail='Invalid token payload.')
 
-    user = db.get(User, uuid.UUID(user_id_str))
+    with Session(get_engine()) as db:
+        user = db.get(User, uuid.UUID(user_id_str))
+
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail='User not found or inactive.')
 
