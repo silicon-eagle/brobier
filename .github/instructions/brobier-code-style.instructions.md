@@ -62,3 +62,9 @@ applyTo:
 - Choose the version that is easiest to read today.
 - Keep change scope small.
 - Refactor only after a pattern clearly repeats.
+- 
+# Repository workflow instructions
+
+- Never run `git` commands in this repository.
+- The user exclusively controls all version control actions, including status, diff, add, restore, commit, push, pull, checkout, merge, rebase, and reset.
+

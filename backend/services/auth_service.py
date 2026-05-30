@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.auth.jwt import create_access_token
@@ -9,12 +10,12 @@ from backend.db.engine import get_engine
 from backend.db.models.login_code import LoginCode
 from backend.db.models.refresh_token import RefreshToken
 from backend.db.models.user import User
-from backend.email.sender import send_login_code_email
+from backend.services.sender import send_login_code_email
 
 
 def request_code(email: str) -> None:
     with Session(get_engine()) as db:
-        user = db.query(User).filter(User.email == email, User.is_active.is_(True)).first()
+        user = db.scalar(select(User).where(User.email == email, User.is_active.is_(True)))
         if not user:
             return
 
@@ -31,7 +32,7 @@ def request_code(email: str) -> None:
 
 def verify_code(email: str, code: str) -> tuple[str, str, User]:
     with Session(get_engine()) as db:
-        user = db.query(User).filter(User.email == email, User.is_active.is_(True)).first()
+        user = db.scalar(select(User).where(User.email == email, User.is_active.is_(True)))
         if not user:
             raise ValueError('Invalid or expired code.')
 
@@ -78,7 +79,7 @@ def refresh(raw_refresh_token: str) -> str:
         if not token_row:
             raise ValueError('Invalid or expired refresh token.')
 
-        user = db.get(User, token_row.user_id)
+        user = db.scalar(select(User).where(User.id == token_row.user_id))
         if not user or not user.is_active:
             raise ValueError('Invalid or expired refresh token.')
 

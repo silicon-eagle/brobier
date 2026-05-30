@@ -1,113 +1,137 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
 
+import jwt
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
-
+from backend.auth.dependencies import get_current_user, require_admin
 from backend.auth.jwt import create_access_token
-from backend.auth.tokens import generate_refresh_token, hash_token
 from backend.core.config import get_settings
 from backend.db.engine import get_engine
-from backend.db.models.refresh_token import RefreshToken
+from backend.db.models.user import User, UserRole
+from fastapi import HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 
-def _make_bearer(user_id: uuid.UUID, role: str) -> str:
-    return f'Bearer {create_access_token(user_id, role)}'
-
-
-def _seed_refresh_token(user_id: uuid.UUID, *, revoked: bool = False, expired: bool = False) -> str:
-    raw = generate_refresh_token()
-    settings = get_settings()
+@pytest.fixture
+def active_user() -> User:
     with Session(get_engine()) as db:
-        row = RefreshToken(
-            user_id=user_id,
-            token_hash=hash_token(raw),
-            expires_at=(
-                datetime.now(UTC) - timedelta(days=1)
-                if expired
-                else datetime.now(UTC) + timedelta(days=settings.jwt_refresh_expire_days)
-            ),
-            revoked_at=datetime.now(UTC) if revoked else None,
-        )
-        db.add(row)
-        db.commit()
-    return raw
+        user = db.scalar(select(User).where(User.role == UserRole.user).where(User.is_active))
+        assert user is not None
+        return user
 
 
+@pytest.fixture
+def admin_user() -> User:
+    with Session(get_engine()) as db:
+        user = db.scalar(select(User).where(User.role == UserRole.admin).where(User.is_active))
+        assert user is not None
+        return user
+
+
+@pytest.fixture
+def inactive_user() -> User:
+    with Session(get_engine()) as db:
+        user = db.scalar(select(User).where(~User.is_active))
+        if user is None:
+            pytest.skip('No inactive user in database')
+        return user
+
+
+def make_request(authorization_header: str | None = None) -> Request:
+    scope = {
+        'type': 'http',
+        'headers': [],
+        'method': 'GET',
+        'path': '/',
+    }
+    if authorization_header is not None:
+        scope['headers'] = [(b'authorization', authorization_header.encode())]
+    return Request(scope)
+
+
+@pytest.mark.usefixtures('database')
 class TestGetCurrentUser:
-    def test_valid_token_returns_user(self, client: TestClient) -> None:
-        from sqlalchemy.orm import Session as DBSession
-        from backend.db.engine import get_engine
-        from backend.db.models.user import User
+    def test_returns_user_with_valid_token(self, active_user: User) -> None:
+        token = create_access_token(active_user.id, active_user.role)
+        request = make_request(f'Bearer {token}')
+        user = get_current_user(request)
+        assert user.id == active_user.id
+        assert user.is_active
 
-        with DBSession(get_engine()) as db:
-            user = db.query(User).filter(User.email == 'alice@brobier.local').first()
-            assert user is not None
+    def test_raises_401_on_missing_authorization_header(self) -> None:
+        request = make_request(None)
+        with pytest.raises(HTTPException) as exc_info:
+            get_current_user(request)
+        assert exc_info.value.status_code == 401
+        assert 'Missing or invalid Authorization header' in str(exc_info.value.detail)
 
-        response = client.get('/auth/me', headers={'Authorization': _make_bearer(user.id, user.role)})
-        assert response.status_code == 200
-        data = response.json()
-        assert data['id'] == str(user.id)
+    def test_raises_401_on_invalid_header_format(self) -> None:
+        request = make_request('InvalidFormat')
+        with pytest.raises(HTTPException) as exc_info:
+            get_current_user(request)
+        assert exc_info.value.status_code == 401
+        assert 'Missing or invalid Authorization header' in str(exc_info.value.detail)
 
-    def test_missing_token_returns_401(self, client: TestClient) -> None:
-        response = client.get('/auth/me')
-        assert response.status_code == 401
+    def test_raises_401_on_missing_bearer_prefix(self) -> None:
+        request = make_request('Token sometoken')
+        with pytest.raises(HTTPException) as exc_info:
+            get_current_user(request)
+        assert exc_info.value.status_code == 401
+        assert 'Missing or invalid Authorization header' in str(exc_info.value.detail)
 
-    def test_malformed_header_returns_401(self, client: TestClient) -> None:
-        response = client.get('/auth/me', headers={'Authorization': 'Token bad'})
-        assert response.status_code == 401
+    def test_raises_401_on_invalid_token(self) -> None:
+        request = make_request('Bearer invalid.token.here')
+        with pytest.raises(HTTPException) as exc_info:
+            get_current_user(request)
+        assert exc_info.value.status_code == 401
 
-    def test_invalid_token_returns_401(self, client: TestClient) -> None:
-        response = client.get('/auth/me', headers={'Authorization': 'Bearer not.a.real.token'})
-        assert response.status_code == 401
+    def test_raises_401_on_tampered_token(self, active_user: User) -> None:
+        token = create_access_token(active_user.id, active_user.role)
+        tampered = token[:-4] + 'XXXX'
+        request = make_request(f'Bearer {tampered}')
+        with pytest.raises(HTTPException) as exc_info:
+            get_current_user(request)
+        assert exc_info.value.status_code == 401
 
-    def test_inactive_user_returns_401(self, client: TestClient) -> None:
-        from sqlalchemy.orm import Session as DBSession
-        from backend.db.engine import get_engine
-        from backend.db.models.user import User
+    def test_raises_401_on_missing_sub_in_token(self) -> None:
+        settings = get_settings()
+        payload = {'role': 'user'}
+        token = jwt.encode(payload, settings.jwt_secret, algorithm='HS256')
+        request = make_request(f'Bearer {token}')
+        with pytest.raises(HTTPException) as exc_info:
+            get_current_user(request)
+        assert exc_info.value.status_code == 401
+        assert 'Invalid token payload' in str(exc_info.value.detail)
 
-        with DBSession(get_engine()) as db:
-            user = db.query(User).filter(User.email == 'dave@brobier.local').first()
-            assert user is not None
+    def test_raises_401_on_user_not_found(self) -> None:
+        fake_user_id = uuid.uuid4()
+        token = create_access_token(fake_user_id, 'user')
+        request = make_request(f'Bearer {token}')
+        with pytest.raises(HTTPException) as exc_info:
+            get_current_user(request)
+        assert exc_info.value.status_code == 401
+        assert 'User not found or inactive' in str(exc_info.value.detail)
 
-        response = client.get('/auth/me', headers={'Authorization': _make_bearer(user.id, user.role)})
-        assert response.status_code == 401
+    def test_raises_401_on_inactive_user(self, inactive_user: User) -> None:
+        token = create_access_token(inactive_user.id, inactive_user.role)
+        request = make_request(f'Bearer {token}')
+        with pytest.raises(HTTPException) as exc_info:
+            get_current_user(request)
+        assert exc_info.value.status_code == 401
+        assert 'User not found or inactive' in str(exc_info.value.detail)
 
-    def test_unknown_user_id_returns_401(self, client: TestClient) -> None:
-        response = client.get('/auth/me', headers={'Authorization': _make_bearer(uuid.uuid4(), 'user')})
-        assert response.status_code == 401
 
-
+@pytest.mark.usefixtures('database')
 class TestRequireAdmin:
-    def test_admin_role_granted_access(self, client: TestClient) -> None:
-        from sqlalchemy.orm import Session as DBSession
-        from backend.db.engine import get_engine
-        from backend.db.models.user import User
+    def test_returns_admin_user_when_user_is_admin(self, admin_user: User) -> None:
+        result = require_admin(admin_user)
+        assert result.id == admin_user.id
+        assert result.role == UserRole.admin
 
-        with DBSession(get_engine()) as db:
-            admin = db.query(User).filter(User.email == 'admin@brobier.local').first()
-            assert admin is not None
-
-        # /auth/me is not admin-only; test via dependency directly by calling a protected route.
-        # Since no admin-only route exists yet we just verify admin can call /auth/me.
-        response = client.get('/auth/me', headers={'Authorization': _make_bearer(admin.id, admin.role)})
-        assert response.status_code == 200
-        assert response.json()['role'] == 'admin'
-
-    def test_non_admin_token_forbidden_on_admin_route(self, client: TestClient) -> None:
-        from sqlalchemy.orm import Session as DBSession
-        from backend.db.engine import get_engine
-        from backend.db.models.user import User
-
-        with DBSession(get_engine()) as db:
-            user = db.query(User).filter(User.email == 'alice@brobier.local').first()
-            assert user is not None
-
-        # When an admin-only route is added, its dependency will call require_admin.
-        # Here we verify /auth/me (non-admin) returns 200 for a regular user.
-        response = client.get('/auth/me', headers={'Authorization': _make_bearer(user.id, user.role)})
-        assert response.status_code == 200
-        assert response.json()['role'] == 'user'
+    def test_raises_403_when_user_is_not_admin(self, active_user: User) -> None:
+        with pytest.raises(HTTPException) as exc_info:
+            require_admin(active_user)
+        assert exc_info.value.status_code == 403
+        assert 'Admin access required' in str(exc_info.value.detail)

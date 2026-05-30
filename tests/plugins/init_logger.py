@@ -1,6 +1,5 @@
 import time
 from collections.abc import Generator
-from typing import Any
 
 import pytest
 from loguru import logger
@@ -16,18 +15,6 @@ def pytest_configure(config: pytest.Config) -> None:
     config_name = config.inipath
     _setup_logger()
     logger.info(f'Started logging! 🔥 ({config_name})')
-
-
-@pytest.hookimpl(hookwrapper=True, tryfirst=True)
-def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[Any]) -> Generator[None]:
-    outcome = yield
-    if outcome is None:
-        logger.warning(f'No outcome from pytest_runtest_makereport for {item.nodeid} at phase {call.when}')
-        return
-    rep = outcome.get_result()
-    if rep.when != call.when:
-        logger.debug(f'Hook phase mismatch for {item.nodeid}: rep={rep.when}, call={call.when}')
-    setattr(item, 'rep_' + rep.when, rep)
 
 
 @pytest.fixture(autouse=True)

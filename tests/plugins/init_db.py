@@ -6,14 +6,18 @@ from backend.db.init_db import db_drop, init_db
 from backend.seeds.seed import check_is_seeded, seed_database
 from loguru import logger
 from sqlalchemy import inspect
+from sqlalchemy.exc import OperationalError
 
 
-@pytest.fixture(scope='session', autouse=True)
+@pytest.fixture(scope='session')
 def database(setup_environment: bool) -> Generator[None]:
     _ = setup_environment
     logger.debug('Initializing database...')
     engine = get_engine()
-    init_db(engine=engine)
+    try:
+        init_db(engine=engine)
+    except OperationalError as exc:
+        pytest.skip(f'Database is not reachable for DB-backed tests: {exc}')
 
     existing = set(inspect(engine).get_table_names())
     assert {'users', 'beer_entries'}.issubset(existing), 'Tables not created correctly!'

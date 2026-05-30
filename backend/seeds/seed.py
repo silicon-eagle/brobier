@@ -55,7 +55,7 @@ seeders: list[tuple[Table, Callable[[Session], bool], Callable[[Session], None]]
 def seed_database(engine: Engine, tables: list[Table] | None = None) -> None:
     with Session(engine) as db:
         for table, is_seeded, seed in seeders:
-            if tables is not None and table.value not in tables:
+            if tables is None or table in tables:
                 if not is_seeded(db):
                     seed(db)
         db.commit()
@@ -64,6 +64,6 @@ def check_is_seeded(engine: Engine, tables: list[Table] | None = None) -> dict[T
     result = {}
     with Session(engine) as db:
         for table, is_seeded, _ in seeders:
-            if tables is not None and table.value not in tables:
+            if tables is None or table in tables:
                 result[table] = is_seeded(db)
     return result

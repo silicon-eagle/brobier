@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.auth.jwt import decode_access_token
@@ -24,7 +25,7 @@ def get_current_user(request: Request) -> User:
         raise HTTPException(status_code=401, detail='Invalid token payload.')
 
     with Session(get_engine()) as db:
-        user = db.get(User, uuid.UUID(user_id_str))
+        user = db.scalar(select(User).where(User.id == uuid.UUID(user_id_str)))
 
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail='User not found or inactive.')

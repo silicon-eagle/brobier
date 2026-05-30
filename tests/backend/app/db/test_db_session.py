@@ -4,7 +4,7 @@ from sqlalchemy import Engine, text
 from sqlalchemy.orm.session import Session
 
 
-@pytest.mark.usefixtures('needs_env_vars')
+@pytest.mark.usefixtures('needs_env_vars', 'database')
 def test_get_engine() -> None:
     engine = get_engine()
     assert isinstance(engine, Engine)
