@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from loguru import logger
 
 # pytest plugins
-pytest_plugins = ['plugins.init_logger', 'plugins.init_db']
+pytest_plugins = ['plugins.logger', 'plugins.database', 'plugins.mailpit']
 
 
 @pytest.fixture(scope='session', autouse=True)

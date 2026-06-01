@@ -39,7 +39,7 @@ def build_login_code_email(to: str, code: str, smtp_from: str, expires_in_minute
     return msg
 
 
-def send_login_code_email(to: str, code: str) -> None:
+def send_login_code_email(to: str, code: str) -> EmailMessage:
     settings = get_settings()
     msg = build_login_code_email(
         to=to,
@@ -54,3 +54,4 @@ def send_login_code_email(to: str, code: str) -> None:
             server.starttls()
             server.ehlo()
         server.send_message(msg)
+    return msg
