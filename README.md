@@ -2,6 +2,18 @@
 Website voor de jaarlijkse brobeer advent traditie! Ik brobier maar wat...
 
 ## Auth flow
+```text
+1. POST /auth/request-code   ← email sent
+2. POST /auth/verify-code    ← refresh token (cookie, 7d) + access token (15min)
+
+   [normal usage]
+3. POST /auth/refresh        ← swap refresh cookie → new access token
+   (repeat every 15min)
+
+4. refresh token expires / is revoked (logout)
+   ↓
+   back to step 1
+```
 
 ```text
 User               Frontend                        Backend                    DB / Mail

@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.auth.jwt import decode_access_token
+from backend.core.config import get_settings
 from backend.db.engine import get_engine
 from backend.db.models.user import User, UserRole
 
@@ -37,3 +38,11 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail='Admin access required.')
     return current_user
+
+
+def get_refresh_token_raw(request: Request) -> str:
+    cookie_name = get_settings().jwt_refresh_cookie_name
+    raw = request.cookies.get(cookie_name)
+    if not raw:
+        raise HTTPException(status_code=401, detail='Refresh token missing.')
+    return raw

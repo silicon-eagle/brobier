@@ -46,7 +46,7 @@ Task ID format:
   - **Done when:** Model has all columns from spec 5.6: `id` (int PK), `user_id` (FK → User), `beer_entry_id` (FK → BeerEntry), `rating` (float, not null, DB check `1.0 ≤ rating ≤ 5.0`), `comment` (nullable), `drank_at` (nullable datetime), `created_at`, `updated_at`. A `UNIQUE(user_id, beer_entry_id)` constraint prevents a user from rating the same beer twice.
 
 ### 4. Seed and Init Logic
-- [x ] `BE-4.1` Implement startup initialization flow in `app/main.py` (create schema +seed call).
+- [x] `BE-4.1` Implement startup initialization flow in `app/main.py` (create schema +seed call).
     - **Done when:** On `docker compose up`, the backend logs confirm tables were created (or already exist) and seed data was checked. `GET /health` responds `200 {"status": "ok"}` after startup without manual intervention.
 - [x] `BE-4.2` Implement `app/db/init_db.py` to run `Base.metadata.create_all(engine)`.
   - **Done when:** Calling `init_db()` creates all tables in a fresh database without error. A second call on an existing database is a no-op (no error, no data loss).
@@ -72,9 +72,9 @@ Task ID format:
   - **Done when:** A valid (non-revoked, non-expired) refresh token cookie: hashes the raw cookie value, finds the matching `RefreshToken` row, and returns `200 {"access_token": <new_jwt>, "token_type": "bearer"}`. Missing, revoked, or expired refresh token returns `401`. The old `RefreshToken` row is **not** rotated on refresh (stateless re-use within expiry window is acceptable).
 - [ ] `BE-6.5` Implement `logout` flow — route `POST /auth/logout`.
   - **Done when:** Calling `POST /auth/logout` with a valid refresh cookie sets `RefreshToken.revoked_at = now` in the database and clears the refresh cookie. A subsequent `POST /auth/refresh` with the cleared cookie returns `401`.
-- [ ] `BE-6.6` Implement `get_current_user` FastAPI dependency in `app/auth/dependencies.py`.
+- [x] `BE-6.6` Implement `get_current_user` FastAPI dependency in `app/auth/dependencies.py`.
   - **Done when:** The dependency reads the JWT from the `Authorization: Bearer <token>` header, decodes and verifies it using `JWT_SECRET`, extracts `sub` (user id), loads the `User` from the database, and returns it. Returns `401` if the header is absent, the token is malformed, expired, or the user no longer exists.
-- [ ] `BE-6.7` Implement `require_admin` FastAPI dependency in `app/auth/dependencies.py`.
+- [x] `BE-6.7` Implement `require_admin` FastAPI dependency in `app/auth/dependencies.py`.
   - **Done when:** The dependency wraps `get_current_user` and additionally checks `user.role == "admin"`. Returns `403` if the user is authenticated but not an admin. Any endpoint using `require_admin` is inaccessible to a regular user (confirmed in `BE-8.4`).
 - [ ] `BE-6.8` Enforce refresh cookie flags by environment.
   - **Done when:** In development (`ENVIRONMENT=development`), the refresh cookie is set with `HttpOnly=True`, `SameSite=Lax`, `Secure=False`, `Path=/auth/refresh`, and `Max-Age` matching `JWT_REFRESH_EXPIRE_DAYS` in seconds. In production (`ENVIRONMENT=production`), the same cookie is set with `Secure=True`. Verified by inspecting the `Set-Cookie` header in the response from `POST /auth/verify-code`.

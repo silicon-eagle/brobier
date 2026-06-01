@@ -1,8 +1,9 @@
-import pytest
 import httpx2
+import pytest
 from backend.services.sender import build_login_code_email, send_login_code_email
 
-@pytest.fixture()
+
+@pytest.fixture
 def login_code() -> str:
     return 'ABC123'
 

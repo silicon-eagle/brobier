@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     jwt_secret: str = Field(default='a cold beer a day keeps the doctor away, but two keeps the bugs at bay', alias='JWT_SECRET')
 
-    jwt_access_expire_minutes: int = Field(default=15, alias='JWT_ACCESS_EXPIRE_MINUTES')
+    jwt_access_expire_minutes: int = Field(default=60, alias='JWT_ACCESS_EXPIRE_MINUTES')
     jwt_refresh_expire_days: int = Field(default=7, alias='JWT_REFRESH_EXPIRE_DAYS')
     jwt_refresh_cookie_name: str = Field(default='brobier_refresh', alias='JWT_REFRESH_COOKIE_NAME')
 
