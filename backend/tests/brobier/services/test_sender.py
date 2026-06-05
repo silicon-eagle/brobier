@@ -1,4 +1,4 @@
-import httpx2
+import httpx
 import pytest
 from brobier.services.sender import build_login_code_email, send_login_code_email
 
@@ -46,13 +46,13 @@ def test_send_login_code_email_sends_email(login_code: str, mailpit: str) -> Non
 
     send_login_code_email(to='test@brobier.local', code=login_code)
 
-    response = httpx2.get(f'{mailpit}/message/latest')
+    response = httpx.get(f'{mailpit}/message/latest')
     response.raise_for_status()
     message = response.json()
     message_id = message['ID']
 
     assert message['Subject'] == 'Your Brobier login code'
 
-    raw = httpx2.get(f'{mailpit}/message/{message_id}/raw')
+    raw = httpx.get(f'{mailpit}/message/{message_id}/raw')
     raw.raise_for_status()
     assert login_code in raw.text

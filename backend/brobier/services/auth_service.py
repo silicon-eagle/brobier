@@ -30,6 +30,18 @@ def request_code(email: str) -> None:
     send_login_code_email(email, code)
 
 
+def _generate_refresh_token(user: User, db: Session) -> str:
+    settings = get_settings()
+    raw_token = generate_refresh_token()
+    db.add(
+        RefreshToken(
+            user_id=user.id,
+            token_hash=hash_token(raw_token),
+            expires_at=datetime.now(UTC) + timedelta(days=settings.jwt_refresh_expire_days),
+        )
+    )
+    return raw_token
+
 def verify_code(email: str, code: str) -> tuple[str, str, User]:
     with Session(get_engine()) as db:
         user = db.scalar(select(User).where(User.email == email, User.is_active.is_(True)))
@@ -51,13 +63,7 @@ def verify_code(email: str, code: str) -> tuple[str, str, User]:
 
         login_code.used_at = datetime.now(UTC)
 
-        settings = get_settings()
-        raw_token = generate_refresh_token()
-        db.add(RefreshToken(
-            user_id=user.id,
-            token_hash=hash_token(raw_token),
-            expires_at=datetime.now(UTC) + timedelta(days=settings.jwt_refresh_expire_days),
-        ))
+        raw_token = _generate_refresh_token(user, db)
         db.commit()
         db.refresh(user)
 
@@ -65,7 +71,7 @@ def verify_code(email: str, code: str) -> tuple[str, str, User]:
     return access_token, raw_token, user
 
 
-def refresh(raw_refresh_token: str) -> str:
+def refresh(raw_refresh_token: str) -> tuple[str, str]:
     with Session(get_engine()) as db:
         token_row = (
             db.query(RefreshToken)
@@ -83,7 +89,13 @@ def refresh(raw_refresh_token: str) -> str:
         if not user or not user.is_active:
             raise ValueError('Invalid or expired refresh token.')
 
-    return create_access_token(user.id, user.role)
+        user_id, user_role = user.id, user.role
+        token_row.revoked_at = datetime.now(UTC)
+
+        new_raw_token = _generate_refresh_token(user, db)
+        db.commit()
+
+    return create_access_token(user_id, user_role), new_raw_token
 
 
 def logout(raw_refresh_token: str) -> None:

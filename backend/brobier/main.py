@@ -1,10 +1,9 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from brobier.api.routes import auth, beers, calendar
 from fastapi import Depends, FastAPI
 
-from brobier.api.routes import leaderboard
+from brobier.api.routes import auth, beers, calendar, leaderboard
 from brobier.api.routes.admin import beers as admin_beers
 from brobier.api.routes.admin import calendar as admin_calendar
 from brobier.api.routes.admin import users as admin_users

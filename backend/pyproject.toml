@@ -17,6 +17,7 @@ dependencies = [
     "click>=8.4.1",
     "uvicorn>=0.48.0",
     "pyjwt>=2.13.0",
+    "httpx>=0.28.1",
 ]
 
 
@@ -27,11 +28,10 @@ brobier = 'brobier.cli:cli'
 dev = [
 	'coverage>=7.10.7',
 	'debugpy>=1.8.17',
-	"httpx2>=2.2.0",
 	'pytest-asyncio>=1.3.0',
 	'pytest-cov>=7.0.0',
 	'pytest-env>=1.2.0',
-	'pytest>=8.4.2',
+	"pytest>=8.4.2",
 	"ruff>=0.15.15",
 	"ty>=0.0.40",
 ]
@@ -52,6 +52,7 @@ testpaths = ['tests']
 filterwarnings = ['ignore::DeprecationWarning']
 pythonpath = ['.', 'brobier', 'tests']
 asyncio_mode = 'auto'
+asyncio_default_fixture_loop_scope = 'session'
 
 [tool.pytest_env]
 DI_UTILS_USER_AGENT = 'brobier-api-client'

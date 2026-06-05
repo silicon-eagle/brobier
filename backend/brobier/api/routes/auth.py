@@ -24,7 +24,7 @@ def _set_refresh_cookie(response: Response, raw_token: str) -> None:
         httponly=True,
         samesite='lax',
         secure=settings.env == 'prd',
-        path='/auth/refresh',
+        path='/auth',
         max_age=settings.jwt_refresh_expire_days * 86400,
     )
 
@@ -33,7 +33,7 @@ def _clear_refresh_cookie(response: Response) -> None:
     settings = get_settings()
     response.delete_cookie(
         key=settings.jwt_refresh_cookie_name,
-        path='/auth/refresh',
+        path='/auth',
     )
 
 
@@ -58,12 +58,13 @@ def verify_code(body: VerifyCodeIn, response: Response) -> VerifyCodeResponse:
 
 
 @router.post('/refresh', response_model=TokenResponse)
-def refresh(raw_token: str = Depends(get_refresh_token_raw)) -> TokenResponse:
+def refresh(response: Response, raw_token: str = Depends(get_refresh_token_raw)) -> TokenResponse:
     try:
-        access_token = auth_service.refresh(raw_token)
+        access_token, new_raw_token = auth_service.refresh(raw_token)
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
 
+    _set_refresh_cookie(response, new_raw_token)
     return TokenResponse(access_token=access_token)
 
 

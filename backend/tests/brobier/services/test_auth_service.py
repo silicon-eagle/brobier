@@ -1,7 +1,7 @@
 import re
 from datetime import UTC, datetime
 
-import httpx2
+import httpx
 import pytest
 from brobier.auth.jwt import decode_access_token
 from brobier.auth.tokens import hash_token
@@ -12,11 +12,11 @@ from sqlalchemy.orm import Session
 
 
 def _get_code_from_email(mailpit: str) -> str:
-    response = httpx2.get(f'{mailpit}/messages')
+    response = httpx.get(f'{mailpit}/messages')
     response.raise_for_status()
     message_id = response.json()['messages'][0]['ID']
 
-    response = httpx2.get(f'{mailpit}/message/{message_id}')
+    response = httpx.get(f'{mailpit}/message/{message_id}')
     response.raise_for_status()
     text = response.json()['Text']
 
@@ -27,8 +27,8 @@ def _get_code_from_email(mailpit: str) -> str:
 
 @pytest.mark.usefixtures('database')
 class TestAuthService:
-    def test_request_code(self, mailpit: str) -> None:
-        email = 'alice@brobier.local'
+    def test_request_code(self, mailpit: str, tst_globals: dict[str, str]) -> None:
+        email = tst_globals['USER']
         before = datetime.now(UTC)
         request_code(email=email)
         with Session(get_engine()) as db:
@@ -37,14 +37,14 @@ class TestAuthService:
             assert login_code is not None
             assert login_code.code_hash is not None
 
-            response = httpx2.get(f'{mailpit}/message/latest')
+            response = httpx.get(f'{mailpit}/message/latest')
             response.raise_for_status()
             message = response.json()
             assert message['Subject'] == 'Your Brobier login code'
 
-    def test_verify_code(self, mailpit: str) -> None:
-        email = 'alice@brobier.local'
-        httpx2.request('DELETE', f'{mailpit}/messages').raise_for_status()
+    def test_verify_code(self, mailpit: str, tst_globals: dict[str, str]) -> None:
+        email = tst_globals['USER']
+        httpx.request('DELETE', f'{mailpit}/messages').raise_for_status()
         request_code(email=email)
         code = _get_code_from_email(mailpit)
 
@@ -71,24 +71,32 @@ class TestAuthService:
         with pytest.raises(ValueError):
             verify_code(email='dave@brobier.local', code='000000')  # inactive user
 
-    def test_refresh_token(self, mailpit: str) -> None:
-        email = 'alice@brobier.local'
-        httpx2.request('DELETE', f'{mailpit}/messages').raise_for_status()
+    def test_refresh_token(self, mailpit: str, tst_globals: dict[str, str]) -> None:
+        email = tst_globals['USER']
+        httpx.request('DELETE', f'{mailpit}/messages').raise_for_status()
         request_code(email=email)
         code = _get_code_from_email(mailpit)
         _, raw_refresh_token, user = verify_code(email=email, code=code)
 
-        new_access_token = refresh(raw_refresh_token)
+        new_access_token, new_raw_refresh_token = refresh(raw_refresh_token)
 
         payload = decode_access_token(new_access_token)
         assert payload['sub'] == str(user.id)
+        assert new_raw_refresh_token != raw_refresh_token
+
+        with Session(get_engine()) as db:
+            old_token_row = db.scalar(db.query(RefreshToken).where(RefreshToken.token_hash == hash_token(raw_refresh_token)))
+            assert old_token_row.revoked_at is not None
+
+        with pytest.raises(ValueError):
+            refresh(raw_refresh_token)  # old token revoked
 
         with pytest.raises(ValueError):
             refresh('invalid-token')
 
-    def test_logout(self, mailpit: str) -> None:
-        email = 'alice@brobier.local'
-        httpx2.request('DELETE', f'{mailpit}/messages').raise_for_status()
+    def test_logout(self, mailpit: str, tst_globals: dict[str, str]) -> None:
+        email = tst_globals['USER']
+        httpx.request('DELETE', f'{mailpit}/messages').raise_for_status()
         request_code(email=email)
         code = _get_code_from_email(mailpit)
         _, raw_refresh_token, _ = verify_code(email=email, code=code)
@@ -105,9 +113,9 @@ class TestAuthService:
         with pytest.raises(ValueError):
             refresh(raw_refresh_token)  # revoked token cannot be used
 
-    def test_integration(self, mailpit: str) -> None:
-        email = 'alice@brobier.local'
-        httpx2.request('DELETE', f'{mailpit}/messages').raise_for_status()
+    def test_integration(self, mailpit: str, tst_globals: dict[str, str]) -> None:
+        email = tst_globals['USER']
+        httpx.request('DELETE', f'{mailpit}/messages').raise_for_status()
 
         request_code(email=email)
         code = _get_code_from_email(mailpit)
@@ -116,11 +124,11 @@ class TestAuthService:
         payload = decode_access_token(access_token)
         assert payload['sub'] == str(user.id)
 
-        new_access_token = refresh(raw_refresh_token)
+        new_access_token, new_raw_refresh_token = refresh(raw_refresh_token)
         new_payload = decode_access_token(new_access_token)
         assert new_payload['sub'] == str(user.id)
 
-        logout(raw_refresh_token)
+        logout(new_raw_refresh_token)
 
         with pytest.raises(ValueError):
-            refresh(raw_refresh_token)  # token revoked after logout
+            refresh(new_raw_refresh_token)  # token revoked after logout
