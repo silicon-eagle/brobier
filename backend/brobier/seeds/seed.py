@@ -1,9 +1,10 @@
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
+from brobier.core.time import APP_TIMEZONE, current_time
 from brobier.db.models.calendar_entry import CalendarEntry
 from brobier.db.models.user import User, UserRole
 from brobier.db.utils import Table
@@ -14,7 +15,7 @@ def _is_users_seeded(db: Session) -> bool:
 
 
 def _is_calendar_seeded(db: Session) -> bool:
-    year = datetime.now().year
+    year = current_time().year
     return db.query(CalendarEntry).filter(CalendarEntry.year == year).first() is not None
 
 
@@ -29,7 +30,7 @@ def _seed_users(db: Session) -> None:
 
 
 def _seed_calendar(db: Session) -> None:
-    year = datetime.now().year
+    year = current_time().year
     existing_days = {
         row.day
         for row in db.query(CalendarEntry.day).filter(CalendarEntry.year == year).all()
@@ -38,7 +39,7 @@ def _seed_calendar(db: Session) -> None:
         CalendarEntry(
             year=year,
             day=day,
-            unlock_date=datetime(year, 12, day, 8, 0, 0, tzinfo=UTC),
+            unlock_date=datetime(year, 12, day, 8, 0, 0, tzinfo=APP_TIMEZONE),
             title=f'Day {day}',
             content='',
         )

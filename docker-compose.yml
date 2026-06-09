@@ -11,16 +11,19 @@ services:
   db-dev:
     image: postgres:18-alpine
     container_name: brobier-db-dev
+    env_file:
+      - ./.env
     environment:
-      POSTGRES_DB: brobier_dev
-      POSTGRES_USER: ${DB_USER:-brobier}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-brobier_dev}
+      POSTGRES_DB: ${DB_NAME:-brobier_dev}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - db-dev-data:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-brobier} -d brobier_dev"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_ADMIN_USER -d $$DB_NAME"]
       interval: 5s
       timeout: 5s
       retries: 5

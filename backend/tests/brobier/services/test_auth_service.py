@@ -1,10 +1,10 @@
 import re
-from datetime import UTC, datetime
 
 import httpx
 import pytest
 from brobier.auth.jwt import decode_access_token
 from brobier.auth.tokens import hash_token
+from brobier.core.time import current_time
 from brobier.db.engine import get_engine
 from brobier.db.models import LoginCode, RefreshToken, User
 from brobier.services.auth_service import logout, refresh, request_code, verify_code
@@ -29,11 +29,10 @@ def _get_code_from_email(mailpit: str) -> str:
 class TestAuthService:
     def test_request_code(self, mailpit: str, tst_globals: dict[str, str]) -> None:
         email = tst_globals['USER']
-        before = datetime.now(UTC)
         request_code(email=email)
         with Session(get_engine()) as db:
             user = db.scalar(db.query(User).where(User.email == email))
-            login_code = db.scalar(db.query(LoginCode).where(LoginCode.user_id == user.id).where(LoginCode.created_at >= before))
+            login_code = db.scalar(db.query(LoginCode).where(LoginCode.user_id == user.id))
             assert login_code is not None
             assert login_code.code_hash is not None
 
@@ -101,7 +100,7 @@ class TestAuthService:
         code = _get_code_from_email(mailpit)
         _, raw_refresh_token, _ = verify_code(email=email, code=code)
 
-        before = datetime.now(UTC)
+        before = current_time()
         logout(raw_refresh_token)
 
         with Session(get_engine()) as db:

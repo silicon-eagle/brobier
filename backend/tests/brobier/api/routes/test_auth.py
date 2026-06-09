@@ -1,3 +1,5 @@
+from collections.abc import AsyncGenerator
+
 import pytest
 from brobier.schemas.auth import MessageResponse, RequestCodeIn, TokenResponse, VerifyCodeIn, VerifyCodeResponse
 from httpx import AsyncClient, Cookies, Response
@@ -13,13 +15,14 @@ async def request_code(async_client: AsyncClient, mailpit: str, tst_globals: dic
     return extract_code(mailpit=mailpit, message_id=msg_id)
 
 @pytest.fixture
-async def user_login(async_client: AsyncClient, tst_globals: dict[str, str], request_code: str) -> Response:
+async def user_login(async_client: AsyncClient, tst_globals: dict[str, str], request_code: str) -> AsyncGenerator[Response]:
     user_email = tst_globals['USER']
     verify_code_in = VerifyCodeIn(email=user_email, code=request_code)
     response = await async_client.post('/auth/verify-code', json=verify_code_in.model_dump(exclude_none=True))
     access_token = response.json()['access_token']
     async_client.headers['Authorization'] = f'Bearer {access_token}'
-    return response
+    yield response
+    del async_client.headers['Authorization']
 
 @pytest.mark.usefixtures('database')
 class TestAuthRoutes:
@@ -61,7 +64,8 @@ class TestAuthRoutes:
         assert isinstance(refresh_response.cookies, Cookies)
         assert user_login.cookies != refresh_response.cookies
 
-    async def test_logout(self, async_client: AsyncClient, user_login: Response) -> None:
+    @pytest.mark.usefixtures('user_login')
+    async def test_logout(self, async_client: AsyncClient) -> None:
         logout_response = await async_client.post('/auth/logout')
         assert logout_response.status_code == 200
         parsed_response = MessageResponse.model_validate(logout_response.json())

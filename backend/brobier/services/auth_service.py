@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from brobier.auth.jwt import create_access_token
 from brobier.auth.tokens import generate_login_code, generate_refresh_token, hash_token
 from brobier.core.config import get_settings
+from brobier.core.time import current_time
 from brobier.db.engine import get_engine
 from brobier.db.models.login_code import LoginCode
 from brobier.db.models.refresh_token import RefreshToken
@@ -24,7 +25,7 @@ def request_code(email: str) -> None:
         db.add(LoginCode(
             user_id=user.id,
             code_hash=hash_token(code),
-            expires_at=datetime.now(UTC) + timedelta(minutes=settings.login_code_expire_minutes),
+            expires_at=current_time() + timedelta(minutes=settings.login_code_expire_minutes),
         ))
         db.commit()
     send_login_code_email(email, code)
@@ -37,7 +38,7 @@ def _generate_refresh_token(user: User, db: Session) -> str:
         RefreshToken(
             user_id=user.id,
             token_hash=hash_token(raw_token),
-            expires_at=datetime.now(UTC) + timedelta(days=settings.jwt_refresh_expire_days),
+            expires_at=current_time() + timedelta(days=settings.jwt_refresh_expire_days),
         )
     )
     return raw_token
@@ -54,14 +55,14 @@ def verify_code(email: str, code: str) -> tuple[str, str, User]:
                 LoginCode.user_id == user.id,
                 LoginCode.code_hash == hash_token(code),
                 LoginCode.used_at.is_(None),
-                LoginCode.expires_at > datetime.now(UTC),
+                LoginCode.expires_at > current_time(),
             )
             .first()
         )
         if not login_code:
             raise ValueError('Invalid or expired code.')
 
-        login_code.used_at = datetime.now(UTC)
+        login_code.used_at = current_time()
 
         raw_token = _generate_refresh_token(user, db)
         db.commit()
@@ -78,7 +79,7 @@ def refresh(raw_refresh_token: str) -> tuple[str, str]:
             .filter(
                 RefreshToken.token_hash == hash_token(raw_refresh_token),
                 RefreshToken.revoked_at.is_(None),
-                RefreshToken.expires_at > datetime.now(UTC),
+                RefreshToken.expires_at > current_time(),
             )
             .first()
         )
@@ -90,7 +91,7 @@ def refresh(raw_refresh_token: str) -> tuple[str, str]:
             raise ValueError('Invalid or expired refresh token.')
 
         user_id, user_role = user.id, user.role
-        token_row.revoked_at = datetime.now(UTC)
+        token_row.revoked_at = current_time()
 
         new_raw_token = _generate_refresh_token(user, db)
         db.commit()
@@ -109,5 +110,5 @@ def logout(raw_refresh_token: str) -> None:
             .first()
         )
         if token_row:
-            token_row.revoked_at = datetime.now(UTC)
+            token_row.revoked_at = current_time()
             db.commit()

@@ -8,12 +8,14 @@ _DATABASE_URL = 'postgresql+psycopg://<user>:<password>@brobier-db-dev:5432/brob
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', case_sensitive=True, extra='ignore')
+    model_config = SettingsConfigDict(env_file_encoding='utf-8', case_sensitive=True, extra='ignore')
     db_host: str = Field(default='localhost', alias='DB_HOST')
     db_name: str = Field(default='brobier_dev', alias='DB_NAME')
     db_port: str = Field(default='5432', alias='DB_PORT')
-    db_user: str | None = Field(default=None, alias='DB_USER')
-    db_password: str | None = Field(default=None, alias='DB_PASSWORD')
+    postgres_app_user: str | None = Field(default=None, alias='POSTGRES_APP_USER')
+    postgres_app_password: str | None = Field(default=None, alias='POSTGRES_APP_PASSWORD')
+    postgres_admin_user: str | None = Field(default=None, alias='POSTGRES_ADMIN_USER')
+    postgres_admin_password: str | None = Field(default=None, alias='POSTGRES_ADMIN_PASSWORD')
 
     beer_encryption_key: str | None = Field(default=None, alias='BEER_ENCRYPTION_KEY')
 
@@ -45,9 +47,20 @@ class Settings(BaseSettings):
             return value
         return [origin.strip() for origin in value.split(',') if origin.strip()]
 
+    def _build_database_url(self, user: str | None, password: str | None) -> str:
+        return f'postgresql+psycopg://{user}:{password}@{self.db_host}:{self.db_port}/{self.db_name}'
+
+    @property
+    def app_database_url(self) -> str:
+        return self._build_database_url(self.postgres_app_user, self.postgres_app_password)
+
+    @property
+    def admin_database_url(self) -> str:
+        return self._build_database_url(self.postgres_admin_user, self.postgres_admin_password)
+
     @property
     def database_url(self) -> str:
-        return f'postgresql+psycopg://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}'
+        return self.app_database_url
 
 
 @lru_cache

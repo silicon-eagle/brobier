@@ -23,13 +23,14 @@ def root_path(test_path: Path) -> Path:
     logger.info(f'Project root path: {root_path!r}')
     return root_path
 
+@pytest.fixture(scope='session', autouse=True)
+def dotenv_path(root_path: Path) -> Path:
+    return root_path.parent / '.env'
 
 @pytest.fixture(scope='session', autouse=True)
-def setup_environment(root_path: Path) -> bool:
-    root_env_file = root_path / '.env'
-
-    loaded_root = load_dotenv(dotenv_path=root_env_file)
-    logger.info(f'Environment variables loaded from {root_env_file!r}: {loaded_root}')
+def setup_environment(dotenv_path: Path) -> bool:
+    loaded_root = load_dotenv(dotenv_path=dotenv_path)
+    logger.info(f'Environment variables loaded from {dotenv_path!r}: {loaded_root}')
     return loaded_root
 
 

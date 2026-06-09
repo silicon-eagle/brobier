@@ -1,9 +1,10 @@
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import jwt
 
 from brobier.core.config import get_settings
+from brobier.core.time import current_time
 
 
 def create_access_token(user_id: uuid.UUID, role: str) -> str:
@@ -11,8 +12,8 @@ def create_access_token(user_id: uuid.UUID, role: str) -> str:
     payload = {
         'sub': str(user_id),
         'role': role,
-        'iat': datetime.now(UTC),
-        'exp': datetime.now(UTC) + timedelta(minutes=settings.jwt_access_expire_minutes),
+        'iat': current_time(),
+        'exp': current_time() + timedelta(minutes=settings.jwt_access_expire_minutes),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm='HS256')
 
