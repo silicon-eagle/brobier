@@ -1,15 +1,14 @@
 from collections.abc import AsyncGenerator
 
 import pytest
-from httpx import AsyncClient
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
 from brobier.auth.jwt import create_access_token
 from brobier.db.engine import get_app_engine
 from brobier.db.models import BeerEntry, User, UserRating
 from brobier.schemas.beer import BeerEntryOut
 from brobier.schemas.user_rating import UserRatingOut
+from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 _BEER_PAYLOAD = {
     'beer_name': 'Test Lager',
@@ -222,9 +221,9 @@ class TestBeerRoutes:
         assert rating.comment == _RATING_PAYLOAD['comment']
         assert rating.beer_entry_id == alice_beer['id']
 
+    @pytest.mark.usefixtures('alice_rating')
     async def test_create_rating_duplicate_returns_409(
-        self, async_client: AsyncClient, alice_token: str, alice_beer: dict, alice_rating: dict
-    ) -> None:
+        self, async_client: AsyncClient, alice_token: str, alice_beer: dict) -> None:
         response = await async_client.post(
             f'/beers/{alice_beer["id"]}/ratings',
             json=_RATING_PAYLOAD,
@@ -242,8 +241,9 @@ class TestBeerRoutes:
         )
         assert response.status_code == 404
 
+    @pytest.mark.usefixtures('alice_rating')
     async def test_update_rating(
-        self, async_client: AsyncClient, alice_token: str, alice_beer: dict, alice_rating: dict
+        self, async_client: AsyncClient, alice_token: str, alice_beer: dict
     ) -> None:
         response = await async_client.put(
             f'/beers/{alice_beer["id"]}/ratings/me',
@@ -265,8 +265,9 @@ class TestBeerRoutes:
         )
         assert response.status_code == 404
 
+    @pytest.mark.usefixtures('alice_rating')
     async def test_delete_rating(
-        self, async_client: AsyncClient, alice_token: str, alice_beer: dict, alice_rating: dict
+        self, async_client: AsyncClient, alice_token: str, alice_beer: dict
     ) -> None:
         response = await async_client.delete(
             f'/beers/{alice_beer["id"]}/ratings/me',

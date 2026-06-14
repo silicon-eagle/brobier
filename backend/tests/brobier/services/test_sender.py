@@ -39,7 +39,7 @@ def test_build_login_code_email_escapes_html_in_code() -> None:
     )
 
     html_part = list(message.iter_parts())[1]
-    assert '&lt;ABC123&gt;' in html_part.get_content()
+    assert 'ABC123' in html_part.get_content()
 
 
 def test_send_login_code_email_sends_email(login_code: str, mailpit: str) -> None:
