@@ -18,24 +18,13 @@ class CalendarBeerOut(BaseModel):
     model_config = {'from_attributes': True}
 
 
-class CalendarEntryLockedOut(BaseModel):
+class CalendarEntryOut(BaseModel):
     id: int
     year: int
     day: int
     unlock_date: datetime
-    title: str
-    is_locked: bool = True
-
-    model_config = {'from_attributes': True}
-
-
-class CalendarEntryUnlockedOut(BaseModel):
-    id: int
-    year: int
-    day: int
-    unlock_date: datetime
-    title: str
-    content: str
+    title: str | None
+    content: str | None
     image_url: str | None
     is_locked: bool = False
     beer: CalendarBeerOut | None = None

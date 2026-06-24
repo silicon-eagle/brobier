@@ -10,12 +10,17 @@ from brobier.db.models.user import User, UserRole
 from brobier.db.utils import Table
 
 
+def _get_seed_years() -> list[int]:
+    current_year = current_time().year
+    return [current_year - 1, current_year, current_year + 1]
+
+
 def _is_users_seeded(db: Session) -> bool:
     return db.query(User).first() is not None
 
 
 def _is_calendar_seeded(db: Session) -> bool:
-    year = current_time().year
+    year = _get_seed_years()[0]
     return db.query(CalendarEntry).filter(CalendarEntry.year == year).first() is not None
 
 
@@ -32,21 +37,22 @@ def _seed_users(db: Session) -> None:
 
 
 def _seed_calendar(db: Session) -> None:
-    year = current_time().year
-    existing_days = {row.day for row in db.query(CalendarEntry.day).filter(CalendarEntry.year == year).all()}
-    db.add_all(
-        [
-            CalendarEntry(
-                year=year,
-                day=day,
-                unlock_date=datetime(year, 12, day, 8, 0, 0, tzinfo=APP_TIMEZONE),
-                title=f'Day {day}',
-                content='',
-            )
-            for day in range(1, 25)
-            if day not in existing_days
-        ]
-    )
+    years = _get_seed_years()
+    for year in years:
+        existing_days = {row.day for row in db.query(CalendarEntry.day).filter(CalendarEntry.year == year).all()}
+        db.add_all(
+            [
+                CalendarEntry(
+                    year=year,
+                    day=day,
+                    unlock_date=datetime(year, 12, day, 8, 0, 0, tzinfo=APP_TIMEZONE),
+                    title=f'Day {day}',
+                    content='',
+                )
+                for day in range(1, 25)
+                if day not in existing_days
+            ]
+        )
 
 
 seeders: list[tuple[Table, Callable[[Session], bool], Callable[[Session], None]]] = [

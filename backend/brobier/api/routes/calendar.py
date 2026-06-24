@@ -1,11 +1,9 @@
 from fastapi import APIRouter, HTTPException, status
 
-from brobier.schemas.calendar import CalendarEntryLockedOut, CalendarEntryUnlockedOut, YearOut
+from brobier.schemas.calendar import CalendarEntryOut, YearOut
 from brobier.services import calendar_service
 
 router = APIRouter(tags=['calendar'])
-
-CalendarEntryOut = CalendarEntryLockedOut | CalendarEntryUnlockedOut
 
 
 @router.get('/years', response_model=list[YearOut])
@@ -18,10 +16,10 @@ def list_calendar(year: int | None = None) -> list[CalendarEntryOut]:
     return calendar_service.list_calendar(year)
 
 
-@router.get('/{day}', response_model=CalendarEntryUnlockedOut)
-def get_calendar_day(day: int, year: int) -> CalendarEntryUnlockedOut:
+@router.get('/{year}/{day}', response_model=CalendarEntryOut)
+def get_calendar_day(day: int, year: int) -> CalendarEntryOut:
     # year is required — FastAPI returns 422 automatically if omitted.
-    # Returns 403 if unlock_date > now (implemented in service layer).
+    # Returns 403 if unlock_date > now (implemented in calendar_service).
     try:
         return calendar_service.get_calendar_day(day, year)
     except ValueError as e:

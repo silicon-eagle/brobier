@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -7,7 +8,7 @@ from brobier.core.security import decrypt_field
 from brobier.core.time import current_time
 from brobier.db.engine import get_app_engine
 from brobier.db.models import BeerEntry, CalendarEntry
-from brobier.schemas.calendar import CalendarBeerOut, CalendarEntryLockedOut, CalendarEntryUnlockedOut, YearOut
+from brobier.schemas.calendar import CalendarBeerOut, CalendarEntryOut, YearOut
 from brobier.schemas.user_rating import UserRatingOut
 
 
@@ -25,20 +26,25 @@ def _make_beer_out(beer_entry: BeerEntry) -> CalendarBeerOut:
     )
 
 
-def _make_entry_out(entry: CalendarEntry, now: datetime) -> CalendarEntryLockedOut | CalendarEntryUnlockedOut:
+def _make_entry_out(entry: CalendarEntry, now: datetime) -> CalendarEntryOut:
     if entry.unlock_date > now:
         # Only return the ID and unlock date for locked entries
-        return CalendarEntryLockedOut(
+        return CalendarEntryOut(
             id=entry.id,
             year=entry.year,
             day=entry.day,
             unlock_date=entry.unlock_date,
-            title=entry.title,
+            title=None,
+            content=None,
+            image_url=None,
+            is_locked=True,
         )
     else:
         # Only retrieve the beer entry if it's unlocked
         beer_out = _make_beer_out(entry.beer_entry) if entry.beer_entry else None
-        return CalendarEntryUnlockedOut(
+        if beer_out is None:
+            logger.warning(f'Calendar entry {entry.id} {entry.title} is unlocked but has no beer entry!')
+        return CalendarEntryOut(
             id=entry.id,
             year=entry.year,
             day=entry.day,
@@ -46,6 +52,7 @@ def _make_entry_out(entry: CalendarEntry, now: datetime) -> CalendarEntryLockedO
             title=entry.title,
             content=entry.content,
             image_url=entry.image_url,
+            is_locked=False,
             beer=beer_out,
         )
 
@@ -56,7 +63,7 @@ def list_years() -> list[YearOut]:
         return [YearOut(year=y) for y in years]
 
 
-def list_calendar(year: int | None = None) -> list[CalendarEntryLockedOut | CalendarEntryUnlockedOut]:
+def list_calendar(year: int | None = None) -> list[CalendarEntryOut]:
     effective_year = year or current_time().year
     now = current_time()
     with Session(get_app_engine()) as db:
@@ -64,7 +71,7 @@ def list_calendar(year: int | None = None) -> list[CalendarEntryLockedOut | Cale
         return [_make_entry_out(entry, now) for entry in entries]
 
 
-def get_calendar_day(day: int, year: int) -> CalendarEntryUnlockedOut:
+def get_calendar_day(day: int, year: int) -> CalendarEntryOut:
     now = current_time()
     with Session(get_app_engine()) as db:
         entry = db.scalar(select(CalendarEntry).filter_by(year=year, day=day))
@@ -72,14 +79,5 @@ def get_calendar_day(day: int, year: int) -> CalendarEntryUnlockedOut:
             raise ValueError('Calendar day not found.')
         if entry.unlock_date > now:
             raise PermissionError('This day is not yet unlocked.')
-        beer_out = _make_beer_out(entry.beer_entry) if entry.beer_entry else None
-        return CalendarEntryUnlockedOut(
-            id=entry.id,
-            year=entry.year,
-            day=entry.day,
-            unlock_date=entry.unlock_date,
-            title=entry.title,
-            content=entry.content,
-            image_url=entry.image_url,
-            beer=beer_out,
-        )
+        entry_out = _make_entry_out(entry, now)
+        return entry_out
