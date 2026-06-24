@@ -1,9 +1,10 @@
 from collections.abc import Generator
 
 import pytest
+from brobier.core.security import decrypt_field
 from brobier.core.time import current_time
 from brobier.db.engine import get_app_engine
-from brobier.db.models import User
+from brobier.db.models import BeerEntry, User
 from brobier.schemas.beer import BeerEntryCreate, BeerEntryOut, BeerEntryUpdate
 from brobier.schemas.user_rating import UserRatingCreate, UserRatingOut, UserRatingUpdate
 from brobier.services.beers_service import (
@@ -66,6 +67,20 @@ class TestBeerService:
             assert created.user_id == user.id
         finally:
             delete_beer(created.id, user.id)
+
+    def test_encrypted_fields_are_not_stored_as_plaintext(self, beer: BeerEntryOut) -> None:
+        with Session(get_app_engine()) as db:
+            row = db.scalar(select(BeerEntry).filter_by(id=beer.id))
+            assert row is not None
+
+        assert row.beer_name_encrypted != 'Test Lager'
+        assert row.brewery_encrypted != 'Test Brewery'
+        assert row.untappd_url_encrypted != 'https://untappd.com/test-beer'
+
+        assert decrypt_field(row.beer_name_encrypted) == 'Test Lager'
+        assert decrypt_field(row.brewery_encrypted) == 'Test Brewery'
+        assert row.untappd_url_encrypted is not None
+        assert decrypt_field(row.untappd_url_encrypted) == 'https://untappd.com/test-beer'
 
     @pytest.mark.usefixtures('beer')
     def test_get_beers_for_user_returns_own_beers(self, tst_globals: dict[str, str]) -> None:
