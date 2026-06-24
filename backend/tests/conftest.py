@@ -23,9 +23,11 @@ def root_path(test_path: Path) -> Path:
     logger.info(f'Project root path: {root_path!r}')
     return root_path
 
+
 @pytest.fixture(scope='session', autouse=True)
 def dotenv_path(root_path: Path) -> Path:
     return root_path.parent / '.env'
+
 
 @pytest.fixture(scope='session', autouse=True)
 def setup_environment(dotenv_path: Path) -> bool:

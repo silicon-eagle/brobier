@@ -22,11 +22,13 @@ def request_code(email: str) -> None:
 
         settings = get_settings()
         code = generate_login_code()
-        db.add(LoginCode(
-            user_id=user.id,
-            code_hash=hash_token(code),
-            expires_at=current_time() + timedelta(minutes=settings.login_code_expire_minutes),
-        ))
+        db.add(
+            LoginCode(
+                user_id=user.id,
+                code_hash=hash_token(code),
+                expires_at=current_time() + timedelta(minutes=settings.login_code_expire_minutes),
+            )
+        )
         db.commit()
     send_login_code_email(email, code)
 
@@ -42,6 +44,7 @@ def _generate_refresh_token(user: User, db: Session) -> str:
         )
     )
     return raw_token
+
 
 def verify_code(email: str, code: str) -> tuple[str, str, User]:
     with Session(get_engine()) as db:

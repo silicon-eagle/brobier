@@ -8,6 +8,7 @@ from brobier.schemas.user_rating import UserRatingOut
 
 # ── Users ──────────────────────────────────────────────────────────────────────
 
+
 class AdminUserOut(BaseModel):
     id: uuid.UUID
     email: str
@@ -35,6 +36,7 @@ class UserUpdate(BaseModel):
 
 # ── Beers ──────────────────────────────────────────────────────────────────────
 
+
 class AdminBeerEntryOut(BaseModel):
     id: int
     user_id: uuid.UUID
@@ -52,6 +54,7 @@ class AdminBeerEntryOut(BaseModel):
 
 
 # ── Calendar ───────────────────────────────────────────────────────────────────
+
 
 class AdminCalendarBeerOut(BaseModel):
     id: int

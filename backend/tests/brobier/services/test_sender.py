@@ -7,6 +7,7 @@ from brobier.services.sender import build_login_code_email, send_login_code_emai
 def login_code() -> str:
     return 'ABC123'
 
+
 def test_build_login_code_email_includes_text_and_html_parts() -> None:
     message = build_login_code_email(
         to='friend@example.com',

@@ -15,6 +15,7 @@ TEMPLATE_ENV = Environment(
     ),
 )
 
+
 def _render_login_code_email_bodies(code: str, expires_in_minutes: int) -> tuple[str, str]:
     template_context = {
         'code': code,

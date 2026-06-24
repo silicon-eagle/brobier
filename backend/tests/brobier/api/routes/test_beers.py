@@ -61,9 +61,7 @@ async def alice_beer(async_client: AsyncClient, alice_token: str) -> AsyncGenera
 
 
 @pytest.fixture
-async def alice_rating(
-    async_client: AsyncClient, alice_token: str, alice_beer: dict
-) -> AsyncGenerator[dict]:
+async def alice_rating(async_client: AsyncClient, alice_token: str, alice_beer: dict) -> AsyncGenerator[dict]:
     response = await async_client.post(
         f'/beers/{alice_beer["id"]}/ratings',
         json=_RATING_PAYLOAD,
@@ -81,20 +79,14 @@ async def alice_rating(
 
 @pytest.mark.usefixtures('database')
 class TestBeerRoutes:
-    async def test_get_my_beers_includes_own_beer(
-        self, async_client: AsyncClient, alice_token: str, alice_beer: dict
-    ) -> None:
+    async def test_get_my_beers_includes_own_beer(self, async_client: AsyncClient, alice_token: str, alice_beer: dict) -> None:
         response = await async_client.get('/beers/me', headers={'Authorization': f'Bearer {alice_token}'})
         assert response.status_code == 200
         ids = [b['id'] for b in response.json()]
         assert alice_beer['id'] in ids
 
-    async def test_get_my_beers_excludes_other_users_beers(
-        self, async_client: AsyncClient, alice_token: str, bob_token: str
-    ) -> None:
-        bob_response = await async_client.post(
-            '/beers', json=_BEER_PAYLOAD, headers={'Authorization': f'Bearer {bob_token}'}
-        )
+    async def test_get_my_beers_excludes_other_users_beers(self, async_client: AsyncClient, alice_token: str, bob_token: str) -> None:
+        bob_response = await async_client.post('/beers', json=_BEER_PAYLOAD, headers={'Authorization': f'Bearer {bob_token}'})
         assert bob_response.status_code == 201
         bob_beer_id = bob_response.json()['id']
         try:
@@ -114,9 +106,7 @@ class TestBeerRoutes:
         assert response.status_code == 401
 
     async def test_create_beer(self, async_client: AsyncClient, alice_token: str) -> None:
-        response = await async_client.post(
-            '/beers', json=_BEER_PAYLOAD, headers={'Authorization': f'Bearer {alice_token}'}
-        )
+        response = await async_client.post('/beers', json=_BEER_PAYLOAD, headers={'Authorization': f'Bearer {alice_token}'})
         assert response.status_code == 201
         beer = BeerEntryOut.model_validate(response.json())
         assert beer.beer_name == _BEER_PAYLOAD['beer_name']
@@ -134,13 +124,9 @@ class TestBeerRoutes:
         assert validated_response[0].untappd_url is None
         assert validated_response[0].comment is None
 
-    async def test_create_beer_with_optional_fields(
-        self, async_client: AsyncClient, alice_token: str
-    ) -> None:
+    async def test_create_beer_with_optional_fields(self, async_client: AsyncClient, alice_token: str) -> None:
         payload = {**_BEER_PAYLOAD, 'untappd_url': 'https://untappd.com/b/test', 'comment': 'A fine ale'}
-        response = await async_client.post(
-            '/beers', json=payload, headers={'Authorization': f'Bearer {alice_token}'}
-        )
+        response = await async_client.post('/beers', json=payload, headers={'Authorization': f'Bearer {alice_token}'})
         assert response.status_code == 201
         beer = BeerEntryOut.model_validate(response.json())
         assert beer.untappd_url == 'https://untappd.com/b/test'
@@ -150,9 +136,7 @@ class TestBeerRoutes:
         response = await async_client.post('/beers', json=_BEER_PAYLOAD)
         assert response.status_code == 401
 
-    async def test_update_beer(
-        self, async_client: AsyncClient, alice_token: str, alice_beer: dict
-    ) -> None:
+    async def test_update_beer(self, async_client: AsyncClient, alice_token: str, alice_beer: dict) -> None:
         response = await async_client.put(
             f'/beers/{alice_beer["id"]}',
             json={'beer_name': 'Updated Lager', 'brewery': 'Updated Brewery'},
@@ -172,9 +156,7 @@ class TestBeerRoutes:
         )
         assert response.status_code == 404
 
-    async def test_update_beer_other_user_returns_404(
-        self, async_client: AsyncClient, bob_token: str, alice_beer: dict
-    ) -> None:
+    async def test_update_beer_other_user_returns_404(self, async_client: AsyncClient, bob_token: str, alice_beer: dict) -> None:
         response = await async_client.put(
             f'/beers/{alice_beer["id"]}',
             json={'beer_name': 'Stolen Beer'},
@@ -182,34 +164,22 @@ class TestBeerRoutes:
         )
         assert response.status_code == 404
 
-    async def test_delete_beer(
-        self, async_client: AsyncClient, alice_token: str, alice_beer: dict
-    ) -> None:
-        response = await async_client.delete(
-            f'/beers/{alice_beer["id"]}', headers={'Authorization': f'Bearer {alice_token}'}
-        )
+    async def test_delete_beer(self, async_client: AsyncClient, alice_token: str, alice_beer: dict) -> None:
+        response = await async_client.delete(f'/beers/{alice_beer["id"]}', headers={'Authorization': f'Bearer {alice_token}'})
         assert response.status_code == 204
         get_response = await async_client.get('/beers/me', headers={'Authorization': f'Bearer {alice_token}'})
         ids = [b['id'] for b in get_response.json()]
         assert alice_beer['id'] not in ids
 
     async def test_delete_beer_not_found(self, async_client: AsyncClient, alice_token: str) -> None:
-        response = await async_client.delete(
-            '/beers/999999', headers={'Authorization': f'Bearer {alice_token}'}
-        )
+        response = await async_client.delete('/beers/999999', headers={'Authorization': f'Bearer {alice_token}'})
         assert response.status_code == 404
 
-    async def test_delete_beer_other_user_returns_404(
-        self, async_client: AsyncClient, bob_token: str, alice_beer: dict
-    ) -> None:
-        response = await async_client.delete(
-            f'/beers/{alice_beer["id"]}', headers={'Authorization': f'Bearer {bob_token}'}
-        )
+    async def test_delete_beer_other_user_returns_404(self, async_client: AsyncClient, bob_token: str, alice_beer: dict) -> None:
+        response = await async_client.delete(f'/beers/{alice_beer["id"]}', headers={'Authorization': f'Bearer {bob_token}'})
         assert response.status_code == 404
 
-    async def test_create_rating(
-        self, async_client: AsyncClient, alice_token: str, alice_beer: dict
-    ) -> None:
+    async def test_create_rating(self, async_client: AsyncClient, alice_token: str, alice_beer: dict) -> None:
         response = await async_client.post(
             f'/beers/{alice_beer["id"]}/ratings',
             json=_RATING_PAYLOAD,
@@ -222,8 +192,7 @@ class TestBeerRoutes:
         assert rating.beer_entry_id == alice_beer['id']
 
     @pytest.mark.usefixtures('alice_rating')
-    async def test_create_rating_duplicate_returns_409(
-        self, async_client: AsyncClient, alice_token: str, alice_beer: dict) -> None:
+    async def test_create_rating_duplicate_returns_409(self, async_client: AsyncClient, alice_token: str, alice_beer: dict) -> None:
         response = await async_client.post(
             f'/beers/{alice_beer["id"]}/ratings',
             json=_RATING_PAYLOAD,
@@ -231,9 +200,7 @@ class TestBeerRoutes:
         )
         assert response.status_code == 409
 
-    async def test_create_rating_beer_not_found(
-        self, async_client: AsyncClient, alice_token: str
-    ) -> None:
+    async def test_create_rating_beer_not_found(self, async_client: AsyncClient, alice_token: str) -> None:
         response = await async_client.post(
             '/beers/999999/ratings',
             json=_RATING_PAYLOAD,
@@ -242,9 +209,7 @@ class TestBeerRoutes:
         assert response.status_code == 404
 
     @pytest.mark.usefixtures('alice_rating')
-    async def test_update_rating(
-        self, async_client: AsyncClient, alice_token: str, alice_beer: dict
-    ) -> None:
+    async def test_update_rating(self, async_client: AsyncClient, alice_token: str, alice_beer: dict) -> None:
         response = await async_client.put(
             f'/beers/{alice_beer["id"]}/ratings/me',
             json={'rating': 3.5, 'comment': 'Actually just okay'},
@@ -255,9 +220,7 @@ class TestBeerRoutes:
         assert rating.rating == 3.5
         assert rating.comment == 'Actually just okay'
 
-    async def test_update_rating_not_found(
-        self, async_client: AsyncClient, alice_token: str, alice_beer: dict
-    ) -> None:
+    async def test_update_rating_not_found(self, async_client: AsyncClient, alice_token: str, alice_beer: dict) -> None:
         response = await async_client.put(
             f'/beers/{alice_beer["id"]}/ratings/me',
             json={'rating': 3.0},
@@ -266,18 +229,14 @@ class TestBeerRoutes:
         assert response.status_code == 404
 
     @pytest.mark.usefixtures('alice_rating')
-    async def test_delete_rating(
-        self, async_client: AsyncClient, alice_token: str, alice_beer: dict
-    ) -> None:
+    async def test_delete_rating(self, async_client: AsyncClient, alice_token: str, alice_beer: dict) -> None:
         response = await async_client.delete(
             f'/beers/{alice_beer["id"]}/ratings/me',
             headers={'Authorization': f'Bearer {alice_token}'},
         )
         assert response.status_code == 204
 
-    async def test_delete_rating_not_found(
-        self, async_client: AsyncClient, alice_token: str, alice_beer: dict
-    ) -> None:
+    async def test_delete_rating_not_found(self, async_client: AsyncClient, alice_token: str, alice_beer: dict) -> None:
         response = await async_client.delete(
             f'/beers/{alice_beer["id"]}/ratings/me',
             headers={'Authorization': f'Bearer {alice_token}'},

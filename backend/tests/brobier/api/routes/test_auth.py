@@ -14,6 +14,7 @@ async def request_code(async_client: AsyncClient, mailpit: str, tst_globals: dic
     msg_id = get_last_message_id(mailpit=mailpit)
     return extract_code(mailpit=mailpit, message_id=msg_id)
 
+
 @pytest.fixture
 async def user_login(async_client: AsyncClient, tst_globals: dict[str, str], request_code: str) -> AsyncGenerator[Response]:
     user_email = tst_globals['USER']
@@ -23,6 +24,7 @@ async def user_login(async_client: AsyncClient, tst_globals: dict[str, str], req
     async_client.headers['Authorization'] = f'Bearer {access_token}'
     yield response
     del async_client.headers['Authorization']
+
 
 @pytest.mark.usefixtures('database')
 class TestAuthRoutes:
@@ -55,7 +57,7 @@ class TestAuthRoutes:
         response = await async_client.post('/auth/verify-code', json=verify_code_in.model_dump(exclude_none=True))
         assert response.status_code == 401
 
-    async def test_refresh(self, async_client: AsyncClient, user_login: Response)-> None:
+    async def test_refresh(self, async_client: AsyncClient, user_login: Response) -> None:
         refresh_response = await async_client.post('/auth/refresh')
         assert refresh_response.status_code == 200
         parsed_response = TokenResponse.model_validate(refresh_response.json())

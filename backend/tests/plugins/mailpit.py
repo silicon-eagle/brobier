@@ -16,4 +16,3 @@ def mailpit() -> Generator[str]:
     yield mailpit_base
 
     httpx.request('DELETE', f'{mailpit_base}/messages').raise_for_status()
-

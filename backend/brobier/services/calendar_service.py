@@ -27,6 +27,7 @@ def _make_beer_out(beer_entry: BeerEntry) -> CalendarBeerOut:
 
 def _make_entry_out(entry: CalendarEntry, now: datetime) -> CalendarEntryLockedOut | CalendarEntryUnlockedOut:
     if entry.unlock_date > now:
+        # Only return the ID and unlock date for locked entries
         return CalendarEntryLockedOut(
             id=entry.id,
             year=entry.year,
@@ -34,17 +35,19 @@ def _make_entry_out(entry: CalendarEntry, now: datetime) -> CalendarEntryLockedO
             unlock_date=entry.unlock_date,
             title=entry.title,
         )
-    beer_out = _make_beer_out(entry.beer_entry) if entry.beer_entry else None
-    return CalendarEntryUnlockedOut(
-        id=entry.id,
-        year=entry.year,
-        day=entry.day,
-        unlock_date=entry.unlock_date,
-        title=entry.title,
-        content=entry.content,
-        image_url=entry.image_url,
-        beer=beer_out,
-    )
+    else:
+        # Only retrieve the beer entry if it's unlocked
+        beer_out = _make_beer_out(entry.beer_entry) if entry.beer_entry else None
+        return CalendarEntryUnlockedOut(
+            id=entry.id,
+            year=entry.year,
+            day=entry.day,
+            unlock_date=entry.unlock_date,
+            title=entry.title,
+            content=entry.content,
+            image_url=entry.image_url,
+            beer=beer_out,
+        )
 
 
 def list_years() -> list[YearOut]:
@@ -53,22 +56,18 @@ def list_years() -> list[YearOut]:
         return [YearOut(year=y) for y in years]
 
 
-def list_calendar(year: int | None) -> list[CalendarEntryLockedOut | CalendarEntryUnlockedOut]:
+def list_calendar(year: int | None = None) -> list[CalendarEntryLockedOut | CalendarEntryUnlockedOut]:
     effective_year = year or current_time().year
     now = current_time()
     with Session(get_app_engine()) as db:
-        entries = db.scalars(
-            select(CalendarEntry).where(CalendarEntry.year == effective_year).order_by(CalendarEntry.day)
-        ).all()
+        entries = db.scalars(select(CalendarEntry).filter_by(year=effective_year).order_by(CalendarEntry.day)).all()
         return [_make_entry_out(entry, now) for entry in entries]
 
 
 def get_calendar_day(day: int, year: int) -> CalendarEntryUnlockedOut:
     now = current_time()
     with Session(get_app_engine()) as db:
-        entry = db.scalar(
-            select(CalendarEntry).where(CalendarEntry.year == year, CalendarEntry.day == day)
-        )
+        entry = db.scalar(select(CalendarEntry).filter_by(year=year, day=day))
         if not entry:
             raise ValueError('Calendar day not found.')
         if entry.unlock_date > now:

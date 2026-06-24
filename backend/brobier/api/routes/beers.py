@@ -113,9 +113,7 @@ def create_rating(
         if not beer:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Beer not found.')
 
-        existing = db.scalar(
-            select(UserRating).where(UserRating.user_id == current_user.id, UserRating.beer_entry_id == beer_id)
-        )
+        existing = db.scalar(select(UserRating).where(UserRating.user_id == current_user.id, UserRating.beer_entry_id == beer_id))
         if existing:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Rating already exists.')
 
@@ -139,9 +137,7 @@ def update_rating(
     current_user: User = Depends(get_current_user),
 ) -> UserRatingOut:
     with Session(get_app_engine()) as db:
-        rating = db.scalar(
-            select(UserRating).where(UserRating.user_id == current_user.id, UserRating.beer_entry_id == beer_id)
-        )
+        rating = db.scalar(select(UserRating).where(UserRating.user_id == current_user.id, UserRating.beer_entry_id == beer_id))
         if not rating:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Rating not found.')
 
@@ -163,9 +159,7 @@ def delete_rating(
     current_user: User = Depends(get_current_user),
 ) -> None:
     with Session(get_app_engine()) as db:
-        rating = db.scalar(
-            select(UserRating).where(UserRating.user_id == current_user.id, UserRating.beer_entry_id == beer_id)
-        )
+        rating = db.scalar(select(UserRating).where(UserRating.user_id == current_user.id, UserRating.beer_entry_id == beer_id))
         if not rating:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Rating not found.')
         db.delete(rating)
