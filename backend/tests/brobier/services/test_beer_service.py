@@ -159,4 +159,3 @@ class TestBeerService:
 
         with pytest.raises(ValueError, match=r'Rating not found\.'):
             delete_rating(beer.id, user.id)
-

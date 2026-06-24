@@ -6,7 +6,7 @@ from brobier.core.security import encrypt_field
 from brobier.core.time import current_time
 from brobier.db.engine import get_app_engine
 from brobier.db.models import BeerEntry, CalendarEntry, User
-from brobier.schemas.admin import AdminCalendarEntryOut, CalendarBeerAssign, AdminCalendarBeerOut
+from brobier.schemas.admin import AdminCalendarBeerOut, AdminCalendarEntryOut, CalendarBeerAssign
 from brobier.schemas.calendar import CalendarEntryOut
 from brobier.seeds.seed import _get_seed_years
 from brobier.services.calendar_service import (
@@ -189,7 +189,6 @@ class TestAdminCalendarService:
         assert all(isinstance(e, AdminCalendarEntryOut) for e in entries)
         assert [e.day for e in entries] == list(range(1, 25))
 
-
     def test_assign_beer_links_beer_to_calendar_day(self, make_beer_entry: Callable[..., int]) -> None:
         year = _get_seed_years()[0]
         beer_id = make_beer_entry()
@@ -210,7 +209,6 @@ class TestAdminCalendarService:
         assert calendar[0].beer_entry_id == beer_id
         assert calendar[0].beer is not None
         assert isinstance(calendar[0].beer, AdminCalendarBeerOut)
-
 
     def test_assign_beer_raises_for_unknown_calendar_day(self, make_beer_entry: Callable[..., int]) -> None:
         beer_id = make_beer_entry()
