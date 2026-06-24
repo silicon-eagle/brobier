@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 
 from brobier.core.security import decrypt_field
 from brobier.core.time import current_time
-from brobier.db.engine import get_app_engine
+from brobier.db.engine import get_admin_engine, get_app_engine
 from brobier.db.models import BeerEntry, CalendarEntry
+from brobier.schemas.admin import AdminCalendarBeerOut, AdminCalendarEntryOut, CalendarBeerAssign
 from brobier.schemas.calendar import CalendarBeerOut, CalendarEntryOut, YearOut
 from brobier.schemas.user_rating import UserRatingOut
 
@@ -81,3 +82,69 @@ def get_calendar_day(day: int, year: int) -> CalendarEntryOut:
             raise PermissionError('This day is not yet unlocked.')
         entry_out = _make_entry_out(entry, now)
         return entry_out
+
+
+def _make_admin_beer_out(beer: BeerEntry) -> AdminCalendarBeerOut:
+    ratings = [UserRatingOut.model_validate(r) for r in beer.user_ratings]
+    return AdminCalendarBeerOut(
+        id=beer.id,
+        user_id=beer.user_id,
+        display_name=beer.user.display_name,
+        beer_name=decrypt_field(beer.beer_name_encrypted),
+        brewery=decrypt_field(beer.brewery_encrypted),
+        untappd_url=decrypt_field(beer.untappd_url_encrypted) if beer.untappd_url_encrypted else None,
+        comment=decrypt_field(beer.comment_encrypted) if beer.comment_encrypted else None,
+        bought_from=beer.bought_from,
+        bought_at=beer.bought_at,
+        ratings=ratings,
+    )
+
+
+def _make_admin_entry_out(entry: CalendarEntry) -> AdminCalendarEntryOut:
+    beer_out = _make_admin_beer_out(entry.beer_entry) if entry.beer_entry else None
+    return AdminCalendarEntryOut(
+        year=entry.year,
+        day=entry.day,
+        unlock_date=entry.unlock_date,
+        title=entry.title,
+        content=entry.content,
+        image_url=entry.image_url,
+        beer_entry_id=entry.beer_entry_id,
+        beer=beer_out,
+    )
+
+
+def list_admin_calendar(year: int | None = None) -> list[AdminCalendarEntryOut]:
+    effective_year = year or current_time().year
+    with Session(get_admin_engine()) as db:
+        entries = db.scalars(select(CalendarEntry).filter_by(year=effective_year).order_by(CalendarEntry.day)).all()
+        return [_make_admin_entry_out(entry) for entry in entries]
+
+
+def assign_beer(year: int, day: int, body: CalendarBeerAssign) -> AdminCalendarEntryOut:
+    with Session(get_admin_engine()) as db:
+        entry = db.scalar(select(CalendarEntry).filter_by(year=year, day=day))
+        if not entry:
+            raise ValueError('Calendar entry not found.')
+        beer = db.scalar(select(BeerEntry).filter_by(id=body.beer_entry_id))
+        if not beer:
+            raise ValueError('Beer entry not found.')
+        if beer.calendar_entry and (beer.calendar_entry.year != year or beer.calendar_entry.day != day):
+            raise ValueError('Beer entry is already assigned to a calendar day.')
+
+        entry.beer_entry_id = body.beer_entry_id
+        db.commit()
+        db.refresh(entry)
+        return _make_admin_entry_out(entry)
+
+
+def unassign_beer(year: int, day: int) -> AdminCalendarEntryOut:
+    with Session(get_admin_engine()) as db:
+        entry = db.scalar(select(CalendarEntry).filter_by(year=year, day=day))
+        if not entry:
+            raise ValueError('Calendar entry not found.')
+
+        entry.beer_entry_id = None
+        db.commit()
+        db.refresh(entry)
+        return _make_admin_entry_out(entry)
