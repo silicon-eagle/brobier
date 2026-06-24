@@ -15,6 +15,7 @@ def _parse_admin_beer(beer: BeerEntry) -> AdminBeerEntryOut:
         id=beer.id,
         user_id=beer.user_id,
         display_name=beer.user.display_name,
+        year=beer.year,
         beer_name=decrypt_field(beer.beer_name_encrypted),
         brewery=decrypt_field(beer.brewery_encrypted),
         untappd_url=decrypt_field(beer.untappd_url_encrypted) if beer.untappd_url_encrypted else None,
@@ -27,7 +28,10 @@ def _parse_admin_beer(beer: BeerEntry) -> AdminBeerEntryOut:
 
 
 @router.get('', response_model=list[AdminBeerEntryOut])
-def list_all_beers() -> list[AdminBeerEntryOut]:
+def list_all_beers(year: int | None = None) -> list[AdminBeerEntryOut]:
     with Session(get_admin_engine()) as db:
-        beers = db.scalars(select(BeerEntry).order_by(BeerEntry.created_at.desc())).all()
+        query = select(BeerEntry).order_by(BeerEntry.created_at.desc())
+        if year is not None:
+            query = query.filter_by(year=year)
+        beers = db.scalars(query).all()
         return [_parse_admin_beer(beer) for beer in beers]

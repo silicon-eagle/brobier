@@ -41,6 +41,7 @@ class AdminBeerEntryOut(BaseModel):
     id: int
     user_id: uuid.UUID
     display_name: str  # owner display name
+    year: int
     beer_name: str
     brewery: str
     untappd_url: str | None
@@ -72,7 +73,6 @@ class AdminCalendarBeerOut(BaseModel):
 
 
 class AdminCalendarEntryOut(BaseModel):
-    id: int
     year: int
     day: int
     unlock_date: datetime
@@ -83,22 +83,6 @@ class AdminCalendarEntryOut(BaseModel):
     beer: AdminCalendarBeerOut | None = None
 
     model_config = {'from_attributes': True}
-
-
-class CalendarEntryCreate(BaseModel):
-    year: int
-    day: int
-    unlock_date: datetime
-    title: str
-    content: str
-    image_url: str | None = None
-
-
-class CalendarEntryUpdate(BaseModel):
-    unlock_date: datetime | None = None
-    title: str | None = None
-    content: str | None = None
-    image_url: str | None = None
 
 
 class CalendarBeerAssign(BaseModel):

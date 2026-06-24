@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 
 class BeerEntryCreate(BaseModel):
+    year: int
     beer_name: str
     brewery: str
     untappd_url: str | None = None
@@ -14,6 +15,7 @@ class BeerEntryCreate(BaseModel):
 
 
 class BeerEntryUpdate(BaseModel):
+    year: int | None = None
     beer_name: str | None = None
     brewery: str | None = None
     untappd_url: str | None = None
@@ -25,6 +27,7 @@ class BeerEntryUpdate(BaseModel):
 class BeerEntryOut(BaseModel):
     id: int
     user_id: uuid.UUID
+    year: int
     beer_name: str
     brewery: str
     untappd_url: str | None

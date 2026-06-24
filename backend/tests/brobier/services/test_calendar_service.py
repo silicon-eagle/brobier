@@ -44,6 +44,7 @@ def _create_beer_entry(*, user_email: str) -> int:
 
         beer = BeerEntry(
             user_id=user.id,
+            year=current_time().year,
             beer_name_encrypted=encrypt_field('Test Beer'),
             brewery_encrypted=encrypt_field('Test Brewery'),
             untappd_url_encrypted=encrypt_field('https://untappd.example/test-beer'),

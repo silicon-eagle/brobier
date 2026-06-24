@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 _BEER_PAYLOAD = {
+    'year': 2024,
     'beer_name': 'Test Lager',
     'brewery': 'Test Brewery',
     'bought_from': 'Test Shop',

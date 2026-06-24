@@ -17,6 +17,7 @@ def parse_beer_entries(beer_entry: BeerEntry) -> BeerEntryOut:
     return BeerEntryOut(
         id=beer_entry.id,
         user_id=beer_entry.user_id,
+        year=beer_entry.year,
         beer_name=decrypt_field(beer_entry.beer_name_encrypted),
         brewery=decrypt_field(beer_entry.brewery_encrypted),
         untappd_url=decrypt_field(beer_entry.untappd_url_encrypted) if beer_entry.untappd_url_encrypted else None,
@@ -43,6 +44,7 @@ def create_beer(
     with Session(get_app_engine()) as db:
         beer = BeerEntry(
             user_id=current_user.id,
+            year=body.year,
             beer_name_encrypted=encrypt_field(body.beer_name),
             brewery_encrypted=encrypt_field(body.brewery),
             untappd_url_encrypted=encrypt_field(body.untappd_url) if body.untappd_url else None,
@@ -69,6 +71,8 @@ def update_beer(
         if beer.user_id != current_user.id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Beer not found.')
 
+        if body.year is not None:
+            beer.year = body.year
         if body.beer_name is not None:
             beer.beer_name_encrypted = encrypt_field(body.beer_name)
         if body.brewery is not None:

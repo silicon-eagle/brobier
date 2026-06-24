@@ -3,14 +3,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from brobier.core.security import decrypt_field
+from brobier.core.time import current_time
 from brobier.db.engine import get_admin_engine
 from brobier.db.models import BeerEntry, CalendarEntry
 from brobier.schemas.admin import (
     AdminCalendarBeerOut,
     AdminCalendarEntryOut,
     CalendarBeerAssign,
-    CalendarEntryCreate,
-    CalendarEntryUpdate,
 )
 from brobier.schemas.user_rating import UserRatingOut
 
@@ -36,7 +35,6 @@ def _parse_admin_beer(beer: BeerEntry) -> AdminCalendarBeerOut:
 def _parse_admin_entry(entry: CalendarEntry) -> AdminCalendarEntryOut:
     beer_out = _parse_admin_beer(entry.beer_entry) if entry.beer_entry else None
     return AdminCalendarEntryOut(
-        id=entry.id,
         year=entry.year,
         day=entry.day,
         unlock_date=entry.unlock_date,
@@ -48,73 +46,30 @@ def _parse_admin_entry(entry: CalendarEntry) -> AdminCalendarEntryOut:
     )
 
 
+def _get_calendar_entry(db: Session, year: int, day: int) -> CalendarEntry:
+    entry = db.scalar(select(CalendarEntry).filter_by(year=year, day=day))
+    if not entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Calendar entry not found.')
+    return entry
+
+
 @router.get('', response_model=list[AdminCalendarEntryOut])
 def list_calendar(year: int | None = None) -> list[AdminCalendarEntryOut]:
+    effective_year = year or current_time().year
     with Session(get_admin_engine()) as db:
-        query = select(CalendarEntry).order_by(CalendarEntry.year, CalendarEntry.day)
-        if year is not None:
-            query = query.where(CalendarEntry.year == year)
-        entries = db.scalars(query).all()
+        entries = db.scalars(select(CalendarEntry).filter_by(year=effective_year).order_by(CalendarEntry.day)).all()
         return [_parse_admin_entry(entry) for entry in entries]
 
 
-@router.post('', response_model=AdminCalendarEntryOut, status_code=status.HTTP_201_CREATED)
-def create_calendar_entry(body: CalendarEntryCreate) -> AdminCalendarEntryOut:
+@router.put('/{year}/{day}/beer', response_model=AdminCalendarEntryOut)
+def assign_beer(year: int, day: int, body: CalendarBeerAssign) -> AdminCalendarEntryOut:
     with Session(get_admin_engine()) as db:
-        entry = CalendarEntry(
-            year=body.year,
-            day=body.day,
-            unlock_date=body.unlock_date,
-            title=body.title,
-            content=body.content,
-            image_url=body.image_url,
-        )
-        db.add(entry)
-        db.commit()
-        db.refresh(entry)
-        return _parse_admin_entry(entry)
-
-
-@router.put('/{entry_id}', response_model=AdminCalendarEntryOut)
-def update_calendar_entry(entry_id: int, body: CalendarEntryUpdate) -> AdminCalendarEntryOut:
-    with Session(get_admin_engine()) as db:
-        entry = db.scalar(select(CalendarEntry).where(CalendarEntry.id == entry_id))
-        if not entry:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Calendar entry not found.')
-
-        if body.unlock_date is not None:
-            entry.unlock_date = body.unlock_date
-        if body.title is not None:
-            entry.title = body.title
-        if body.content is not None:
-            entry.content = body.content
-        if body.image_url is not None:
-            entry.image_url = body.image_url
-
-        db.commit()
-        db.refresh(entry)
-        return _parse_admin_entry(entry)
-
-
-@router.delete('/{entry_id}', status_code=status.HTTP_204_NO_CONTENT)
-def delete_calendar_entry(entry_id: int) -> None:
-    with Session(get_admin_engine()) as db:
-        entry = db.scalar(select(CalendarEntry).where(CalendarEntry.id == entry_id))
-        if not entry:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Calendar entry not found.')
-        db.delete(entry)
-        db.commit()
-
-
-@router.put('/{entry_id}/beer', response_model=AdminCalendarEntryOut)
-def assign_beer(entry_id: int, body: CalendarBeerAssign) -> AdminCalendarEntryOut:
-    with Session(get_admin_engine()) as db:
-        entry = db.scalar(select(CalendarEntry).where(CalendarEntry.id == entry_id))
-        if not entry:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Calendar entry not found.')
-        beer = db.scalar(select(BeerEntry).where(BeerEntry.id == body.beer_entry_id))
+        entry = _get_calendar_entry(db, year, day)
+        beer = db.scalar(select(BeerEntry).filter_by(id=body.beer_entry_id))
         if not beer:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Beer entry not found.')
+        if beer.calendar_entry and (beer.calendar_entry.year != year or beer.calendar_entry.day != day):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Beer entry is already assigned to a calendar day.')
 
         entry.beer_entry_id = body.beer_entry_id
         db.commit()
@@ -122,12 +77,10 @@ def assign_beer(entry_id: int, body: CalendarBeerAssign) -> AdminCalendarEntryOu
         return _parse_admin_entry(entry)
 
 
-@router.delete('/{entry_id}/beer', response_model=AdminCalendarEntryOut)
-def unassign_beer(entry_id: int) -> AdminCalendarEntryOut:
+@router.delete('/{year}/{day}/beer', response_model=AdminCalendarEntryOut)
+def unassign_beer(year: int, day: int) -> AdminCalendarEntryOut:
     with Session(get_admin_engine()) as db:
-        entry = db.scalar(select(CalendarEntry).where(CalendarEntry.id == entry_id))
-        if not entry:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Calendar entry not found.')
+        entry = _get_calendar_entry(db, year, day)
 
         entry.beer_entry_id = None
         db.commit()

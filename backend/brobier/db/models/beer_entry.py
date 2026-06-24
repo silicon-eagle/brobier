@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,6 +22,7 @@ class BeerEntry(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey(f'{Table.users}.id'), nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
     beer_name_encrypted: Mapped[str] = mapped_column(String, nullable=False)
     brewery_encrypted: Mapped[str] = mapped_column(String, nullable=False)
     untappd_url_encrypted: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -34,3 +35,8 @@ class BeerEntry(Base):
     user: Mapped[User] = relationship('User', back_populates='beer_entries')
     calendar_entry: Mapped[CalendarEntry] = relationship('CalendarEntry', back_populates='beer_entry', uselist=False)
     user_ratings: Mapped[list[UserRating]] = relationship('UserRating', back_populates='beer_entry')
+
+    __table_args__ = (
+        CheckConstraint('year >= 2020', name='ck_beer_entries_year'),
+        Index('ix_beer_entries_year', 'year'),
+    )
