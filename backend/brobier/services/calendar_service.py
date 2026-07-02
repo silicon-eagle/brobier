@@ -4,9 +4,10 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from brobier.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from brobier.core.security import decrypt_field
-from brobier.core.time import current_time
-from brobier.db.engine import get_admin_engine, get_app_engine
+from brobier.core.time import APP_TIMEZONE, current_time
+from brobier.db.engine import get_app_engine
 from brobier.db.models import BeerEntry, CalendarEntry
 from brobier.schemas.admin import AdminCalendarBeerOut, AdminCalendarEntryOut, CalendarBeerAssign
 from brobier.schemas.calendar import CalendarBeerOut, CalendarEntryOut, YearOut
@@ -77,9 +78,9 @@ def get_calendar_day(day: int, year: int) -> CalendarEntryOut:
     with Session(get_app_engine()) as db:
         entry = db.scalar(select(CalendarEntry).filter_by(year=year, day=day))
         if not entry:
-            raise ValueError('Calendar day not found.')
+            raise NotFoundError('Calendar day not found.')
         if entry.unlock_date > now:
-            raise PermissionError('This day is not yet unlocked.')
+            raise ForbiddenError('This day is not yet unlocked.')
         entry_out = _make_entry_out(entry, now)
         return entry_out
 
@@ -114,23 +115,57 @@ def _make_admin_entry_out(entry: CalendarEntry) -> AdminCalendarEntryOut:
     )
 
 
+def genereate_calendar_entries(year: int) -> list[CalendarEntry]:
+    return [
+        CalendarEntry(
+            year=year,
+            day=day,
+            unlock_date=datetime(year, 12, day, 8, 0, 0, tzinfo=APP_TIMEZONE),
+            title=f'Day {day}',
+            content='',
+        )
+        for day in range(1, 25)
+    ]
+
+
+def create_calendar_year(year: int) -> None:
+    with Session(get_app_engine()) as db:
+        existing_days = {row.day for row in db.query(CalendarEntry.day).filter(CalendarEntry.year == year).all()}
+        entries = [entry for entry in genereate_calendar_entries(year) if entry.day not in existing_days]
+        db.add_all(entries)
+        db.commit()
+
+
+def delete_calendar_year(year: int) -> None:
+    with Session(get_app_engine()) as db:
+        entries = db.scalars(select(CalendarEntry).filter_by(year=year)).all()
+        if any(entry.beer_entry_id is not None for entry in entries):
+            raise ConflictError('Cannot delete calendar year because at least one day has an assigned beer.')
+
+        for entry in entries:
+            db.delete(entry)
+        db.commit()
+
+
 def list_admin_calendar(year: int | None = None) -> list[AdminCalendarEntryOut]:
     effective_year = year or current_time().year
-    with Session(get_admin_engine()) as db:
+    with Session(get_app_engine()) as db:
         entries = db.scalars(select(CalendarEntry).filter_by(year=effective_year).order_by(CalendarEntry.day)).all()
         return [_make_admin_entry_out(entry) for entry in entries]
 
 
 def assign_beer(year: int, day: int, body: CalendarBeerAssign) -> AdminCalendarEntryOut:
-    with Session(get_admin_engine()) as db:
-        entry = db.scalar(select(CalendarEntry).filter_by(year=year, day=day))
+    with Session(get_app_engine()) as db:
+        entry: CalendarEntry | None = db.scalar(select(CalendarEntry).filter_by(year=year, day=day))
         if not entry:
-            raise ValueError('Calendar entry not found.')
-        beer = db.scalar(select(BeerEntry).filter_by(id=body.beer_entry_id))
+            raise NotFoundError('Calendar entry not found.')
+        beer: BeerEntry | None = db.scalar(select(BeerEntry).filter_by(id=body.beer_entry_id))
         if not beer:
-            raise ValueError('Beer entry not found.')
+            raise NotFoundError('Beer entry not found.')
+        if beer.year != year:
+            raise ConflictError('Beer entry belongs to a different calendar year.')
         if beer.calendar_entry and (beer.calendar_entry.year != year or beer.calendar_entry.day != day):
-            raise ValueError('Beer entry is already assigned to a calendar day.')
+            raise ConflictError('Beer entry is already assigned to a calendar day.')
 
         entry.beer_entry_id = body.beer_entry_id
         db.commit()
@@ -139,10 +174,10 @@ def assign_beer(year: int, day: int, body: CalendarBeerAssign) -> AdminCalendarE
 
 
 def unassign_beer(year: int, day: int) -> AdminCalendarEntryOut:
-    with Session(get_admin_engine()) as db:
-        entry = db.scalar(select(CalendarEntry).filter_by(year=year, day=day))
+    with Session(get_app_engine()) as db:
+        entry: CalendarEntry | None = db.scalar(select(CalendarEntry).filter_by(year=year, day=day))
         if not entry:
-            raise ValueError('Calendar entry not found.')
+            raise NotFoundError('Calendar entry not found.')
 
         entry.beer_entry_id = None
         db.commit()

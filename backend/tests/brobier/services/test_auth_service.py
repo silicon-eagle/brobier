@@ -5,6 +5,7 @@ import pytest
 from brobier.auth.jwt import decode_access_token
 from brobier.auth.tokens import hash_token
 from brobier.core.config import get_settings
+from brobier.core.exceptions import UnauthorizedError
 from brobier.core.time import current_time
 from brobier.db.engine import get_engine
 from brobier.db.models import LoginCode, RefreshToken, User
@@ -68,13 +69,13 @@ class TestAuthService:
         payload = decode_access_token(access_token)
         assert payload['sub'] == str(user.id)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnauthorizedError):
             verify_code(email=email, code=code)  # code cannot be reused
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnauthorizedError):
             verify_code(email=email, code='000000')  # wrong code
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnauthorizedError):
             verify_code(email='dave@brobier.local', code='000000')  # inactive user
 
     def test_verify_code_resets_wrong_login_attempts_after_success(self, mailpit: str, tst_globals: dict[str, str]) -> None:
@@ -83,7 +84,7 @@ class TestAuthService:
         request_code(email=email)
         code = _get_code_from_email(mailpit)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnauthorizedError):
             verify_code(email=email, code=_wrong_code_for(code))
 
         with Session(get_engine()) as db:
@@ -105,7 +106,7 @@ class TestAuthService:
         code = _get_code_from_email(mailpit)
 
         for _ in range(get_settings().login_max_attempts):
-            with pytest.raises(ValueError):
+            with pytest.raises(UnauthorizedError):
                 verify_code(email=email, code=_wrong_code_for(code))
 
         with Session(get_engine()) as db:
@@ -115,7 +116,7 @@ class TestAuthService:
             assert active_codes == []
             assert user.nr_wrong_login_attempts == 0
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnauthorizedError):
             verify_code(email=email, code=code)
 
     def test_refresh_token(self, mailpit: str, tst_globals: dict[str, str]) -> None:
@@ -135,10 +136,10 @@ class TestAuthService:
             old_token_row = db.scalar(db.query(RefreshToken).where(RefreshToken.token_hash == hash_token(raw_refresh_token)))
             assert old_token_row.revoked_at is not None
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnauthorizedError):
             refresh(raw_refresh_token)  # old token revoked
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnauthorizedError):
             refresh('invalid-token')
 
     def test_logout(self, mailpit: str, tst_globals: dict[str, str]) -> None:
@@ -157,7 +158,7 @@ class TestAuthService:
             assert token_row.revoked_at is not None
             assert token_row.revoked_at >= before
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnauthorizedError):
             refresh(raw_refresh_token)  # revoked token cannot be used
 
     def test_integration(self, mailpit: str, tst_globals: dict[str, str]) -> None:
@@ -177,5 +178,5 @@ class TestAuthService:
 
         logout(new_raw_refresh_token)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(UnauthorizedError):
             refresh(new_raw_refresh_token)  # token revoked after logout

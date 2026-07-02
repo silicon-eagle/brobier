@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, Response
 
 from brobier.auth.dependencies import get_current_user, get_refresh_token_raw
 from brobier.core.config import get_settings
@@ -45,11 +45,7 @@ def request_code(body: RequestCodeIn) -> MessageResponse:
 
 @router.post('/verify-code', response_model=VerifyCodeResponse)
 def verify_code(body: VerifyCodeIn, response: Response) -> VerifyCodeResponse:
-    try:
-        access_token, raw_refresh_token, user = auth_service.verify_code(body.email, body.code)
-    except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e)) from e
-
+    access_token, raw_refresh_token, user = auth_service.verify_code(body.email, body.code)
     _set_refresh_cookie(response, raw_refresh_token)
     return VerifyCodeResponse(
         access_token=access_token,
@@ -59,11 +55,7 @@ def verify_code(body: VerifyCodeIn, response: Response) -> VerifyCodeResponse:
 
 @router.post('/refresh', response_model=TokenResponse)
 def refresh(response: Response, raw_token: str = Depends(get_refresh_token_raw)) -> TokenResponse:
-    try:
-        access_token, new_raw_token = auth_service.refresh(raw_token)
-    except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e)) from e
-
+    access_token, new_raw_token = auth_service.refresh(raw_token)
     _set_refresh_cookie(response, new_raw_token)
     return TokenResponse(access_token=access_token)
 

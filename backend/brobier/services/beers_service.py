@@ -3,9 +3,11 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from brobier.core.exceptions import ConflictError, NotFoundError
 from brobier.core.security import decrypt_field, encrypt_field
 from brobier.db.engine import get_app_engine
-from brobier.db.models import BeerEntry, UserRating
+from brobier.db.models import BeerEntry, CalendarEntry, UserRating
+from brobier.schemas.admin import AdminBeerEntryOut
 from brobier.schemas.beer import BeerEntryCreate, BeerEntryOut, BeerEntryUpdate
 from brobier.schemas.user_rating import UserRatingCreate, UserRatingOut, UserRatingUpdate
 
@@ -52,9 +54,9 @@ def create_beer(user_id: uuid.UUID, body: BeerEntryCreate) -> BeerEntryOut:
 
 def update_beer(beer_id: int, user_id: uuid.UUID, body: BeerEntryUpdate) -> BeerEntryOut:
     with Session(get_app_engine()) as db:
-        beer = db.scalar(select(BeerEntry).filter_by(id=beer_id, user_id=user_id))
+        beer: BeerEntry | None = db.scalar(select(BeerEntry).filter_by(id=beer_id, user_id=user_id))
         if not beer:
-            raise ValueError('Beer not found.')
+            raise NotFoundError('Beer not found.')
 
         if body.year is not None:
             beer.year = body.year
@@ -80,20 +82,29 @@ def delete_beer(beer_id: int, user_id: uuid.UUID) -> None:
     with Session(get_app_engine()) as db:
         beer = db.scalar(select(BeerEntry).filter_by(id=beer_id, user_id=user_id))
         if not beer:
-            raise ValueError('Beer not found.')
+            raise NotFoundError('Beer not found.')
+
+        assigned_calendar_entry = db.scalar(select(CalendarEntry).filter_by(beer_entry_id=beer_id))
+        if assigned_calendar_entry:
+            raise ConflictError('Cannot delete beer assigned to a calendar day.')
+
+        existing = db.scalar(select(UserRating).filter_by(beer_entry_id=beer_id))
+        if existing:
+            raise ConflictError('Cannot delete beer with existing rating.')
+
         db.delete(beer)
         db.commit()
 
 
 def create_rating(beer_id: int, user_id: uuid.UUID, body: UserRatingCreate) -> UserRatingOut:
     with Session(get_app_engine()) as db:
-        beer = db.scalar(select(BeerEntry).filter_by(id=beer_id))
+        beer: BeerEntry | None = db.scalar(select(BeerEntry).filter_by(id=beer_id))
         if not beer:
-            raise ValueError('Beer not found.')
+            raise NotFoundError('Beer not found.')
 
         existing = db.scalar(select(UserRating).filter_by(user_id=user_id, beer_entry_id=beer_id))
         if existing:
-            raise ValueError('Rating already exists.')
+            raise ConflictError('Rating already exists.')
 
         rating = UserRating(
             user_id=user_id,
@@ -112,7 +123,7 @@ def update_rating(beer_id: int, user_id: uuid.UUID, body: UserRatingUpdate) -> U
     with Session(get_app_engine()) as db:
         rating = db.scalar(select(UserRating).filter_by(user_id=user_id, beer_entry_id=beer_id))
         if not rating:
-            raise ValueError('Rating not found.')
+            raise NotFoundError('Rating not found.')
 
         if body.rating is not None:
             rating.rating = body.rating
@@ -130,6 +141,32 @@ def delete_rating(beer_id: int, user_id: uuid.UUID) -> None:
     with Session(get_app_engine()) as db:
         rating = db.scalar(select(UserRating).filter_by(user_id=user_id, beer_entry_id=beer_id))
         if not rating:
-            raise ValueError('Rating not found.')
+            raise NotFoundError('Rating not found.')
         db.delete(rating)
         db.commit()
+
+
+def _parse_admin_beer(beer: BeerEntry) -> AdminBeerEntryOut:
+    return AdminBeerEntryOut(
+        id=beer.id,
+        user_id=beer.user_id,
+        display_name=beer.user.display_name,
+        year=beer.year,
+        beer_name=decrypt_field(beer.beer_name_encrypted),
+        brewery=decrypt_field(beer.brewery_encrypted),
+        untappd_url=decrypt_field(beer.untappd_url_encrypted) if beer.untappd_url_encrypted else None,
+        comment=decrypt_field(beer.comment_encrypted) if beer.comment_encrypted else None,
+        bought_from=beer.bought_from,
+        bought_at=beer.bought_at,
+        created_at=beer.created_at,
+        updated_at=beer.updated_at,
+    )
+
+
+def list_all_beers(year: int | None = None) -> list[AdminBeerEntryOut]:
+    with Session(get_app_engine()) as db:
+        query = select(BeerEntry).order_by(BeerEntry.created_at.desc())
+        if year is not None:
+            query = query.filter_by(year=year)
+        beers = db.scalars(query).all()
+        return [_parse_admin_beer(beer) for beer in beers]

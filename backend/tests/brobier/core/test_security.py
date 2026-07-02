@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from brobier.auth.jwt import create_access_token, decode_access_token
 from brobier.auth.tokens import generate_login_code, hash_token
+from brobier.core.exceptions import UnauthorizedError
 from brobier.core.security import (
     decrypt_field,
     encrypt_field,
@@ -124,11 +125,11 @@ class TestCreateAccessToken:
 
 class TestDecodeAccessToken:
     def test_raises_on_invalid_token(self) -> None:
-        with pytest.raises(ValueError, match='JWT token is invalid'):
+        with pytest.raises(UnauthorizedError, match='JWT token is invalid'):
             decode_access_token('not.a.valid.token')
 
     def test_raises_on_tampered_token(self) -> None:
         token = create_access_token(uuid.uuid4(), 'user')
         tampered = token[:-4] + 'XXXX'
-        with pytest.raises(ValueError, match='JWT token is invalid'):
+        with pytest.raises(UnauthorizedError, match='JWT token is invalid'):
             decode_access_token(tampered)

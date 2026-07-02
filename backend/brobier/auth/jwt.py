@@ -4,6 +4,7 @@ from datetime import timedelta
 import jwt
 
 from brobier.core.config import get_settings
+from brobier.core.exceptions import UnauthorizedError
 from brobier.core.time import current_time
 
 
@@ -22,6 +23,6 @@ def decode_access_token(token: str) -> dict:
     try:
         return jwt.decode(token, get_settings().jwt_secret, algorithms=['HS256'])
     except jwt.ExpiredSignatureError as e:
-        raise ValueError('JWT token has expired') from e
+        raise UnauthorizedError('JWT token has expired') from e
     except jwt.InvalidTokenError as e:
-        raise ValueError('JWT token is invalid') from e
+        raise UnauthorizedError('JWT token is invalid') from e

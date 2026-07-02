@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 
 from brobier.schemas.calendar import CalendarEntryOut, YearOut
 from brobier.services import calendar_service
@@ -19,10 +19,6 @@ def list_calendar(year: int | None = None) -> list[CalendarEntryOut]:
 @router.get('/{year}/{day}', response_model=CalendarEntryOut)
 def get_calendar_day(day: int, year: int) -> CalendarEntryOut:
     # year is required — FastAPI returns 422 automatically if omitted.
-    # Returns 403 if unlock_date > now (implemented in calendar_service).
-    try:
-        return calendar_service.get_calendar_day(day, year)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
-    except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e)) from e
+    # Missing day/year -> 404, still-locked day -> 403 (mapped from the
+    # NotFoundError / ForbiddenError raised by calendar_service).
+    return calendar_service.get_calendar_day(day, year)

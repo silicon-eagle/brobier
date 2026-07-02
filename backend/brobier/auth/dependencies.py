@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from brobier.auth.jwt import decode_access_token
 from brobier.core.config import get_settings
+from brobier.core.exceptions import UnauthorizedError
 from brobier.db.engine import get_engine
 from brobier.db.models.user import User, UserRole
 
@@ -18,7 +19,7 @@ def get_current_user(request: Request) -> User:
     token = auth_header.removeprefix('Bearer ')
     try:
         payload = decode_access_token(token)
-    except ValueError as e:
+    except UnauthorizedError as e:
         raise HTTPException(status_code=401, detail=str(e)) from e
 
     user_id_str = payload.get('sub')
@@ -26,7 +27,7 @@ def get_current_user(request: Request) -> User:
         raise HTTPException(status_code=401, detail='Invalid token payload.')
 
     with Session(get_engine()) as db:
-        user = db.scalar(select(User).where(User.id == uuid.UUID(user_id_str)))
+        user: User | None = db.scalar(select(User).where(User.id == uuid.UUID(user_id_str)))
 
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail='User not found or inactive.')

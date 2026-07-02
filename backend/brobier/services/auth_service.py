@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from brobier.auth.jwt import create_access_token
 from brobier.auth.tokens import generate_login_code, generate_refresh_token, hash_token
 from brobier.core.config import get_settings
+from brobier.core.exceptions import UnauthorizedError
 from brobier.core.time import current_time
 from brobier.db.engine import get_engine
 from brobier.db.models.login_code import LoginCode
@@ -68,7 +69,7 @@ def verify_code(email: str, code: str) -> tuple[str, str, User]:
         user: User | None = db.scalar(select(User).where(User.email == email, User.is_active.is_(True)))
         if user is None:
             logger.warning(f'User tried to login with invalid email {email}')
-            raise ValueError('Invalid or expired code.')
+            raise UnauthorizedError('Invalid or expired code.')
 
         login_code = (
             db.query(LoginCode)
@@ -89,7 +90,7 @@ def verify_code(email: str, code: str) -> tuple[str, str, User]:
                 logger.warning(f'Login codes for {user.email} have been set to inactive due to failed login attempts')
                 _deactivate_login_codes(user, db)
                 _reset_user_login_attempts(user, db)
-            raise ValueError('Invalid or expired code.')
+            raise UnauthorizedError('Invalid or expired code.')
 
         login_code.used_at = current_time()
         _reset_user_login_attempts(user, db)
@@ -114,11 +115,11 @@ def refresh(raw_refresh_token: str) -> tuple[str, str]:
             .first()
         )
         if not token_row:
-            raise ValueError('Invalid or expired refresh token.')
+            raise UnauthorizedError('Invalid or expired refresh token.')
 
         user: User | None = db.scalar(select(User).where(User.id == token_row.user_id))
         if user is None or not user.is_active:
-            raise ValueError('Invalid or expired refresh token.')
+            raise UnauthorizedError('Invalid or expired refresh token.')
 
         user_id, user_role = user.id, user.role
         token_row.revoked_at = current_time()

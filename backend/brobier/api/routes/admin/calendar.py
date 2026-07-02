@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
 from brobier.schemas.admin import AdminCalendarEntryOut, CalendarBeerAssign
 from brobier.services import calendar_service
@@ -11,19 +11,21 @@ def list_calendar(year: int | None = None) -> list[AdminCalendarEntryOut]:
     return calendar_service.list_admin_calendar(year)
 
 
+@router.put('/{year}', status_code=status.HTTP_204_NO_CONTENT)
+def create_calendar_year(year: int) -> None:
+    calendar_service.create_calendar_year(year)
+
+
+@router.delete('/{year}', status_code=status.HTTP_204_NO_CONTENT)
+def delete_calendar_year(year: int) -> None:
+    calendar_service.delete_calendar_year(year)
+
+
 @router.put('/{year}/{day}/beer', response_model=AdminCalendarEntryOut)
 def assign_beer(year: int, day: int, body: CalendarBeerAssign) -> AdminCalendarEntryOut:
-    try:
-        return calendar_service.assign_beer(year, day, body)
-    except ValueError as e:
-        if 'already assigned' in str(e):
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    return calendar_service.assign_beer(year, day, body)
 
 
 @router.delete('/{year}/{day}/beer', response_model=AdminCalendarEntryOut)
 def unassign_beer(year: int, day: int) -> AdminCalendarEntryOut:
-    try:
-        return calendar_service.unassign_beer(year, day)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    return calendar_service.unassign_beer(year, day)

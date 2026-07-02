@@ -27,7 +27,7 @@ _RATING_PAYLOAD = {
 @pytest.fixture
 def alice_token() -> str:
     with Session(get_app_engine()) as db:
-        user = db.scalar(select(User).where(User.email == 'alice@brobier.local'))
+        user: User | None = db.scalar(select(User).where(User.email == 'alice@brobier.local'))
         assert user is not None
     return create_access_token(user.id, user.role)
 
@@ -35,7 +35,7 @@ def alice_token() -> str:
 @pytest.fixture
 def bob_token() -> str:
     with Session(get_app_engine()) as db:
-        user = db.scalar(select(User).where(User.email == 'bob@brobier.local'))
+        user: User | None = db.scalar(select(User).where(User.email == 'bob@brobier.local'))
         assert user is not None
     return create_access_token(user.id, user.role)
 

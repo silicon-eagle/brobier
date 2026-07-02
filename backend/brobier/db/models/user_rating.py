@@ -22,7 +22,7 @@ class UserRating(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey(f'{Table.users}.id'), nullable=False)
     beer_entry_id: Mapped[int] = mapped_column(Integer, ForeignKey(f'{Table.beer_entries}.id'), nullable=False)
-    rating: Mapped[float | int] = mapped_column(Float, nullable=False)
+    rating: Mapped[float] = mapped_column(Float, nullable=False)
     comment: Mapped[str | None] = mapped_column(String, nullable=True)
     drank_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

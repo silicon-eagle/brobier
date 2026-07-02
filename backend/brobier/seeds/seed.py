@@ -1,13 +1,13 @@
 from collections.abc import Callable
-from datetime import datetime
 
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from brobier.core.time import APP_TIMEZONE, current_time
+from brobier.core.time import current_time
 from brobier.db.models.calendar_entry import CalendarEntry
 from brobier.db.models.user import User, UserRole
 from brobier.db.utils import Table
+from brobier.services.calendar_service import genereate_calendar_entries
 
 
 def _get_seed_years() -> list[int]:
@@ -40,19 +40,8 @@ def _seed_calendar(db: Session) -> None:
     years = _get_seed_years()
     for year in years:
         existing_days = {row.day for row in db.query(CalendarEntry.day).filter(CalendarEntry.year == year).all()}
-        db.add_all(
-            [
-                CalendarEntry(
-                    year=year,
-                    day=day,
-                    unlock_date=datetime(year, 12, day, 8, 0, 0, tzinfo=APP_TIMEZONE),
-                    title=f'Day {day}',
-                    content='',
-                )
-                for day in range(1, 25)
-                if day not in existing_days
-            ]
-        )
+        entries = genereate_calendar_entries(year)
+        db.add_all([day for day in entries if day.day not in existing_days])
 
 
 seeders: list[tuple[Table, Callable[[Session], bool], Callable[[Session], None]]] = [

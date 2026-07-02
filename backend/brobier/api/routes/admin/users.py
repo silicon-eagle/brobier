@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
 from brobier.schemas.admin import AdminUserOut, UserCreate, UserUpdate
 from brobier.services import user_service
@@ -20,23 +20,14 @@ def create_user(body: UserCreate) -> AdminUserOut:
 
 @router.put('/{user_id}', response_model=AdminUserOut)
 def update_user(user_id: uuid.UUID, body: UserUpdate) -> AdminUserOut:
-    try:
-        return user_service.update_user(user_id, body)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    return user_service.update_user(user_id, body)
 
 
 @router.post('/{user_id}/activate', response_model=AdminUserOut)
 def activate_user(user_id: uuid.UUID) -> AdminUserOut:
-    try:
-        return user_service.activate_user(user_id)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    return user_service.activate_user(user_id)
 
 
 @router.post('/{user_id}/deactivate', response_model=AdminUserOut)
 def deactivate_user(user_id: uuid.UUID) -> AdminUserOut:
-    try:
-        return user_service.deactivate_user(user_id)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    return user_service.deactivate_user(user_id)

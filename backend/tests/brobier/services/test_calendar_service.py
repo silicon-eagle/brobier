@@ -11,6 +11,8 @@ from brobier.schemas.calendar import CalendarEntryOut
 from brobier.seeds.seed import _get_seed_years
 from brobier.services.calendar_service import (
     assign_beer,
+    create_calendar_year,
+    delete_calendar_year,
     get_calendar_day,
     list_admin_calendar,
     list_calendar,
@@ -25,14 +27,14 @@ from sqlalchemy.orm import Session
 def make_beer_entry(database: None, tst_globals: dict[str, str]) -> Generator[Callable[..., int]]:  # noqa: ARG001
     created_ids: list[int] = []
 
-    def create(*, user_email: str | None = None) -> int:
+    def create(*, user_email: str | None = None, year: int | None = None) -> int:
         email = user_email or tst_globals['USER']
         with Session(get_app_engine()) as db:
             user = db.scalar(select(User).filter_by(email=email))
             assert user is not None
             created_beer = BeerEntry(
                 user_id=user.id,
-                year=current_time().year,
+                year=year or current_time().year,
                 beer_name_encrypted=encrypt_field('Test Beer'),
                 brewery_encrypted=encrypt_field('Test Brewery'),
                 untappd_url_encrypted=encrypt_field('https://untappd.example/test-beer'),
@@ -118,7 +120,7 @@ class TestCalendarService:
 
     def test_list_calendar_does_not_show_beers_if_locked(self, make_beer_entry: Callable[..., int]) -> None:
         year = _get_seed_years()[-1]
-        beer_id = make_beer_entry()
+        beer_id = make_beer_entry(year=year)
         assign_beer(year, 1, CalendarBeerAssign(beer_entry_id=beer_id))
         calendar = list_calendar(year)
         assert calendar[0].beer is None
@@ -189,9 +191,41 @@ class TestAdminCalendarService:
         assert all(isinstance(e, AdminCalendarEntryOut) for e in entries)
         assert [e.day for e in entries] == list(range(1, 25))
 
+    def test_create_calendar_year_inserts_all_missing_days(self, make_calendar_entry: Callable[..., int]) -> None:
+        year = current_time().year + 10
+        make_calendar_entry(year=year, day=3, unlock_offset_days=1, title='Existing entry')
+
+        create_calendar_year(year)
+
+        entries = list_admin_calendar(year)
+        assert len(entries) == 24
+        assert [entry.day for entry in entries] == list(range(1, 25))
+        assert entries[2].title == 'Existing entry'
+
+    def test_delete_calendar_year_removes_all_days(self) -> None:
+        year = current_time().year + 11
+        create_calendar_year(year)
+
+        delete_calendar_year(year)
+
+        assert list_admin_calendar(year) == []
+
+    def test_delete_calendar_year_raises_if_any_day_has_assigned_beer(self, make_beer_entry: Callable[..., int]) -> None:
+        year = current_time().year + 12
+        create_calendar_year(year)
+        beer_id = make_beer_entry(year=year)
+        assign_beer(year, 7, CalendarBeerAssign(beer_entry_id=beer_id))
+
+        with pytest.raises(ValueError, match=r'assigned beer'):
+            delete_calendar_year(year)
+
+        entries = list_admin_calendar(year)
+        assert len(entries) == 24
+        assert entries[6].beer_entry_id == beer_id
+
     def test_assign_beer_links_beer_to_calendar_day(self, make_beer_entry: Callable[..., int]) -> None:
         year = _get_seed_years()[0]
-        beer_id = make_beer_entry()
+        beer_id = make_beer_entry(year=year)
 
         entry = assign_beer(year, 1, CalendarBeerAssign(beer_entry_id=beer_id))
 
@@ -202,7 +236,7 @@ class TestAdminCalendarService:
 
     def test_list_admin_calendar_returns_beer_entries_if_locked(self, make_beer_entry: Callable[..., int]) -> None:
         year = _get_seed_years()[-1]
-        beer_id = make_beer_entry()
+        beer_id = make_beer_entry(year=year)
 
         assign_beer(year, 1, CalendarBeerAssign(beer_entry_id=beer_id))
         calendar = list_admin_calendar(year)
@@ -224,15 +258,22 @@ class TestAdminCalendarService:
 
     def test_assign_beer_raises_if_already_assigned_to_another_day(self, make_beer_entry: Callable[..., int]) -> None:
         year = _get_seed_years()[0]
-        beer_id = make_beer_entry()
+        beer_id = make_beer_entry(year=year)
         assign_beer(year, 2, CalendarBeerAssign(beer_entry_id=beer_id))
 
         with pytest.raises(ValueError, match=r'already assigned'):
             assign_beer(year, 3, CalendarBeerAssign(beer_entry_id=beer_id))
 
+    def test_assign_beer_raises_if_beer_is_from_different_year(self, make_beer_entry: Callable[..., int]) -> None:
+        year = _get_seed_years()[0]
+        beer_id = make_beer_entry(year=year + 1)
+
+        with pytest.raises(ValueError, match=r'different calendar year'):
+            assign_beer(year, 3, CalendarBeerAssign(beer_entry_id=beer_id))
+
     def test_unassign_beer_removes_beer_from_calendar_day(self, make_beer_entry: Callable[..., int]) -> None:
         year = _get_seed_years()[0]
-        beer_id = make_beer_entry()
+        beer_id = make_beer_entry(year=year)
         assign_beer(year, 4, CalendarBeerAssign(beer_entry_id=beer_id))
 
         entry = unassign_beer(year, 4)

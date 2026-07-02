@@ -4,7 +4,7 @@ import pytest
 from brobier.core.security import decrypt_field
 from brobier.core.time import current_time
 from brobier.db.engine import get_app_engine
-from brobier.db.models import BeerEntry, User
+from brobier.db.models import BeerEntry, CalendarEntry, User
 from brobier.schemas.beer import BeerEntryCreate, BeerEntryOut, BeerEntryUpdate
 from brobier.schemas.user_rating import UserRatingCreate, UserRatingOut, UserRatingUpdate
 from brobier.services.beers_service import (
@@ -70,7 +70,7 @@ class TestBeerService:
 
     def test_encrypted_fields_are_not_stored_as_plaintext(self, beer: BeerEntryOut) -> None:
         with Session(get_app_engine()) as db:
-            row = db.scalar(select(BeerEntry).filter_by(id=beer.id))
+            row: BeerEntry | None = db.scalar(select(BeerEntry).filter_by(id=beer.id))
             assert row is not None
 
         assert row.beer_name_encrypted != 'Test Lager'
@@ -118,6 +118,30 @@ class TestBeerService:
 
         with pytest.raises(ValueError, match=r'Beer not found\.'):
             delete_beer(beer.id, bob.id)
+
+    def test_delete_beer_raises_if_assigned_to_calendar_day(self, beer: BeerEntryOut, tst_globals: dict[str, str]) -> None:
+        user = _get_user(tst_globals['USER'])
+
+        with Session(get_app_engine()) as db:
+            calendar_entry = CalendarEntry(
+                year=current_time().year + 50,
+                day=1,
+                unlock_date=current_time(),
+                title='Assigned beer',
+                content='Assigned beer content',
+                beer_entry_id=beer.id,
+            )
+            db.add(calendar_entry)
+            db.commit()
+
+            try:
+                with pytest.raises(ValueError, match=r'Cannot delete beer assigned to a calendar day\.'):
+                    delete_beer(beer.id, user.id)
+
+                assert db.scalar(select(BeerEntry).filter_by(id=beer.id)) is not None
+            finally:
+                db.delete(calendar_entry)
+                db.commit()
 
     def test_create_rating_returns_rating_out(self, beer: BeerEntryOut, tst_globals: dict[str, str]) -> None:
         user = _get_user(tst_globals['USER'])

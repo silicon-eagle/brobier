@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     beer_encryption_key: str | None = Field(default=None, alias='BEER_ENCRYPTION_KEY')
 
-    jwt_secret: str = Field(default='a cold beer a day keeps the doctor away, but two keeps the bugs at bay', alias='JWT_SECRET')
+    jwt_secret: str = Field(default='', alias='JWT_SECRET')
 
     jwt_access_expire_minutes: int = Field(default=60, alias='JWT_ACCESS_EXPIRE_MINUTES')
     jwt_refresh_expire_days: int = Field(default=7, alias='JWT_REFRESH_EXPIRE_DAYS')

@@ -1,13 +1,15 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from brobier.api.routes import auth, beers, calendar, leaderboard
 from brobier.api.routes.admin import beers as admin_beers
 from brobier.api.routes.admin import calendar as admin_calendar
 from brobier.api.routes.admin import users as admin_users
 from brobier.auth.dependencies import get_current_user, require_admin
+from brobier.core.exceptions import AppError
 from brobier.db.engine import get_admin_engine, get_app_engine
 from brobier.db.init_db import init_db
 from brobier.db.utils import Table
@@ -22,6 +24,11 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator:
 
 
 app = FastAPI(title='Brobier Backend', lifespan=lifespan)
+
+
+@app.exception_handler(AppError)
+async def handle_app_error(_request: Request, exc: AppError) -> JSONResponse:
+    return JSONResponse(status_code=exc.status_code, content={'detail': exc.detail})
 
 
 @app.get('/health')
