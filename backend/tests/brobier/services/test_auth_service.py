@@ -4,6 +4,7 @@ import httpx
 import pytest
 from brobier.auth.jwt import decode_access_token
 from brobier.auth.tokens import hash_token
+from brobier.core.config import get_settings
 from brobier.core.time import current_time
 from brobier.db.engine import get_engine
 from brobier.db.models import LoginCode, RefreshToken, User
@@ -23,6 +24,12 @@ def _get_code_from_email(mailpit: str) -> str:
     match = re.search(r'login code is: (\d+)', text)
     assert match, f'Could not extract login code from email: {text!r}'
     return match.group(1)
+
+
+def _wrong_code_for(code: str) -> str:
+    if code == '000000':
+        return '111111'
+    return '000000'
 
 
 @pytest.mark.usefixtures('database')
@@ -69,6 +76,47 @@ class TestAuthService:
 
         with pytest.raises(ValueError):
             verify_code(email='dave@brobier.local', code='000000')  # inactive user
+
+    def test_verify_code_resets_wrong_login_attempts_after_success(self, mailpit: str, tst_globals: dict[str, str]) -> None:
+        email = tst_globals['USER']
+        httpx.request('DELETE', f'{mailpit}/messages').raise_for_status()
+        request_code(email=email)
+        code = _get_code_from_email(mailpit)
+
+        with pytest.raises(ValueError):
+            verify_code(email=email, code=_wrong_code_for(code))
+
+        with Session(get_engine()) as db:
+            user = db.scalar(db.query(User).where(User.email == email))
+            assert user is not None
+            assert user.nr_wrong_login_attempts == 1
+
+        _, _, verified_user = verify_code(email=email, code=code)
+
+        with Session(get_engine()) as db:
+            user = db.scalar(db.query(User).where(User.id == verified_user.id))
+            assert user is not None
+            assert user.nr_wrong_login_attempts == 0
+
+    def test_verify_code_deactivates_codes_after_max_wrong_login_attempts(self, mailpit: str, tst_globals: dict[str, str]) -> None:
+        email = tst_globals['USER']
+        httpx.request('DELETE', f'{mailpit}/messages').raise_for_status()
+        request_code(email=email)
+        code = _get_code_from_email(mailpit)
+
+        for _ in range(get_settings().login_max_attempts):
+            with pytest.raises(ValueError):
+                verify_code(email=email, code=_wrong_code_for(code))
+
+        with Session(get_engine()) as db:
+            user = db.scalar(db.query(User).where(User.email == email))
+            assert user is not None
+            active_codes = db.query(LoginCode).where(LoginCode.user_id == user.id, LoginCode.is_active.is_(True)).all()
+            assert active_codes == []
+            assert user.nr_wrong_login_attempts == 0
+
+        with pytest.raises(ValueError):
+            verify_code(email=email, code=code)
 
     def test_refresh_token(self, mailpit: str, tst_globals: dict[str, str]) -> None:
         email = tst_globals['USER']

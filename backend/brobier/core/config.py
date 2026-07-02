@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = Field(default=False, alias='SMTP_USE_TLS')
 
     login_code_expire_minutes: int = Field(default=10, alias='LOGIN_CODE_EXPIRE_MINUTES')
+    login_max_attempts: int = Field(default=5, alias='LOGIN_MAX_ATTEMPTS')
 
     cors_origins: list[str] = Field(default_factory=lambda: ['http://localhost'], alias='CORS_ORIGINS')
 
