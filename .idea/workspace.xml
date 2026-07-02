@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="ALL" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="069ae956-3c9a-4d27-acbc-80ffbfcc9616" name="Changes" comment="added boilerplate for fastapi endpoints + documentation" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ChangesViewManager">
+    <option name="groupingKeys">
+      <option value="directory" />
+      <option value="repository" />
+    </option>
+  </component>
+  <component name="EmbeddingIndexingInfo">
+    <option name="cachedIndexableFilesCount" value="72" />
+    <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;silicon-eagle&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;git@github.com:silicon-eagle/brobier.git&quot;,
+    &quot;accountId&quot;: &quot;53271ea9-08d4-4483-8a33-e69a53b527b9&quot;
+  }
+}</component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.0259162358067595" />
+      <entry key="MS500" value="1.4848449095634955" />
+      <entry key="S2" value="2.6872842210506493" />
+      <entry key="S5" value="5.677697762829075" />
+      <entry key="S10" value="9.171641130778777" />
+      <entry key="S30" value="25.6674746044526" />
+      <entry key="S60" value="58.35294410277524" />
+      <entry key="M2" value="119.83527823687848" />
+      <entry key="M5" value="267.3821615548721" />
+      <entry key="M10" value="486.06182256386495" />
+      <entry key="M15" value="662.4832662697085" />
+      <entry key="M30" value="994.1237928573946" />
+      <entry key="H1" value="1292.500509890534" />
+      <entry key="H2" value="1512.3120341907907" />
+      <entry key="H4" value="1657.2120222387134" />
+      <entry key="D1" value="4109.733445744774" />
+      <entry key="W1" value="13483.724707878386" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="1.1935350379234091E-94" />
+      <entry key="S5" value="2.696088035567627E-38" />
+      <entry key="S10" value="1.6419768790738636E-19" />
+      <entry key="S30" value="5.489329734241127E-7" />
+      <entry key="S60" value="7.905917536413018E-4" />
+      <entry key="M2" value="0.03836071989614869" />
+      <entry key="M5" value="0.6124292466080533" />
+      <entry key="M10" value="1.8917796554493806" />
+      <entry key="M15" value="2.893323486721137" />
+      <entry key="M30" value="4.801410107816766" />
+      <entry key="H1" value="6.772306383218213" />
+      <entry key="H2" value="8.435978309873805" />
+      <entry key="H4" value="9.704857036091546" />
+      <entry key="D1" value="33.896227518827544" />
+      <entry key="W1" value="115.05181105805256" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="1.0049797369169151" />
+      <entry key="MS500" value="1.47935283717743" />
+      <entry key="S2" value="2.6848407448503058" />
+      <entry key="S5" value="5.675358513693278" />
+      <entry key="S10" value="9.169593025002428" />
+      <entry key="S30" value="25.665235975823656" />
+      <entry key="S60" value="58.35106892083926" />
+      <entry key="M2" value="119.87047160686521" />
+      <entry key="M5" value="267.9878835082045" />
+      <entry key="M10" value="487.94380198012726" />
+      <entry key="M15" value="665.3665806980606" />
+      <entry key="M30" value="998.9169204525439" />
+      <entry key="H1" value="1299.2670327624496" />
+      <entry key="H2" value="1520.744437156219" />
+      <entry key="H4" value="1666.9148199065316" />
+      <entry key="D1" value="4143.628279140559" />
+      <entry key="W1" value="13598.775824647719" />
+    </decayedShown>
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 7,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3EMstIAzeH815QuYFsY6rxMl9sZ" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;Docker.docker-compose.yml.mailpit: Compose Deployment.executor&quot;: &quot;Run&quot;,
+    &quot;Docker.docker-compose.yml: Compose Deployment.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python tests.pytest for backend.app.core.test_config.test_get_settings.executor&quot;: &quot;Debug&quot;,
+    &quot;Python tests.pytest for backend.app.core.test_security.TestEncryptField.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.pytest for backend.app.core.test_security.TestGenerateEncryptionKey.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.pytest for backend.app.core.test_security.TestGenerateJwt.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.pytest for backend.app.db.test_db_session.test_get_db.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.pytest for backend.app.db.test_db_session.test_get_engine.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.pytest for backend.app.db.test_init_db.test_init_db.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.pytest for backend.app.db.test_session.test_get_db.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.pytest for backend.app.services.test_sender.test_send_login_code_email_sends_email.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.pytest for backend.services.test_auth_service.TestAuthService.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.pytest for backend.services.test_auth_service.TestAuthService.test_request_code.executor&quot;: &quot;Debug&quot;,
+    &quot;Python tests.pytest for backend.services.test_sender.test_send_login_code_email_sends_email.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.pytest for tests.backend.app.core.test_config.test_get_settings.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.pytest in test_security.py.executor&quot;: &quot;Run&quot;,
+    &quot;Python tests.pytest in tests.executor&quot;: &quot;Run&quot;,
+    &quot;Python.security.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;feature/init&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/timkelch/programming/brobier&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;editor.breadcrumbs&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/backend" />
+      <recent name="$PROJECT_DIR$/tests/backend" />
+      <recent name="$PROJECT_DIR$/tests/backend/app/services" />
+      <recent name="$PROJECT_DIR$/backend/services" />
+      <recent name="$PROJECT_DIR$/backend/db" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Docker.docker-compose.yml: Compose Deployment">
+    <configuration default="true" type="docker-deploy" factoryName="docker-compose.yml" temporary="true">
+      <deployment type="docker-compose.yml">
+        <settings />
+      </deployment>
+      <method v="2" />
+    </configuration>
+    <configuration name="docker-compose.yml: Compose Deployment" type="docker-deploy" factoryName="docker-compose.yml" temporary="true" server-name="Docker">
+      <deployment type="docker-compose.yml">
+        <settings>
+          <option name="sourceFilePath" value="docker-compose.yml" />
+        </settings>
+      </deployment>
+      <method v="2" />
+    </configuration>
+    <configuration name="pytest for backend.services.test_auth_service.TestAuthService" type="tests" factoryName="py.test" temporary="true" nameIsGenerated="true">
+      <module name="brobier" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="RUN_TOOL" value="" />
+      <option name="_new_keywords" value="&quot;&quot;" />
+      <option name="_new_parameters" value="&quot;&quot;" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;backend.services.test_auth_service.TestAuthService&quot;" />
+      <option name="_new_targetType" value="&quot;PYTHON&quot;" />
+      <method v="2" />
+    </configuration>
+    <configuration name="pytest for backend.services.test_auth_service.TestAuthService.test_request_code" type="tests" factoryName="py.test" temporary="true" nameIsGenerated="true">
+      <module name="brobier" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="RUN_TOOL" value="" />
+      <option name="_new_keywords" value="&quot;&quot;" />
+      <option name="_new_parameters" value="&quot;&quot;" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;backend.services.test_auth_service.TestAuthService.test_request_code&quot;" />
+      <option name="_new_targetType" value="&quot;PYTHON&quot;" />
+      <method v="2" />
+    </configuration>
+    <configuration name="pytest for backend.services.test_sender.test_send_login_code_email_sends_email" type="tests" factoryName="py.test" temporary="true" nameIsGenerated="true">
+      <module name="brobier" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="RUN_TOOL" value="" />
+      <option name="_new_keywords" value="&quot;&quot;" />
+      <option name="_new_parameters" value="&quot;&quot;" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;backend.services.test_sender.test_send_login_code_email_sends_email&quot;" />
+      <option name="_new_targetType" value="&quot;PYTHON&quot;" />
+      <method v="2" />
+    </configuration>
+    <configuration name="pytest in tests" type="tests" factoryName="py.test" temporary="true" nameIsGenerated="true">
+      <module name="brobier" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="RUN_TOOL" value="" />
+      <option name="_new_keywords" value="&quot;&quot;" />
+      <option name="_new_parameters" value="&quot;&quot;" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;$PROJECT_DIR$/tests&quot;" />
+      <option name="_new_targetType" value="&quot;PATH&quot;" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Docker.docker-compose.yml: Compose Deployment" />
+        <item itemvalue="Python tests.pytest in tests" />
+        <item itemvalue="Python tests.pytest for backend.services.test_auth_service.TestAuthService" />
+        <item itemvalue="Python tests.pytest for backend.services.test_auth_service.TestAuthService.test_request_code" />
+        <item itemvalue="Python tests.pytest for backend.services.test_sender.test_send_login_code_email_sends_email" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-c59985aa861c-c2ffad84badb-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-261.24374.152" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="069ae956-3c9a-4d27-acbc-80ffbfcc9616" name="Changes" comment="" />
+      <created>1779999985501</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1779999985501</updated>
+      <workItem from="1779999986507" duration="4742000" />
+      <workItem from="1780004758891" duration="946000" />
+      <workItem from="1780005735014" duration="1002000" />
+      <workItem from="1780006754733" duration="10406000" />
+      <workItem from="1780065324133" duration="607000" />
+      <workItem from="1780065942851" duration="2134000" />
+      <workItem from="1780068093210" duration="7485000" />
+      <workItem from="1780146308266" duration="24416000" />
+      <workItem from="1780606104527" duration="207000" />
+    </task>
+    <task id="LOCAL-00001" summary="setup of test + database">
+      <option name="closed" value="true" />
+      <created>1780057197742</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1780057197742</updated>
+    </task>
+    <task id="LOCAL-00002" summary="setup of test + database">
+      <option name="closed" value="true" />
+      <created>1780057234418</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1780057234418</updated>
+    </task>
+    <task id="LOCAL-00003" summary="database models + seed + security logic">
+      <option name="closed" value="true" />
+      <created>1780068274616</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1780068274616</updated>
+    </task>
+    <task id="LOCAL-00004" summary="Auth init">
+      <option name="closed" value="true" />
+      <created>1780154643990</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1780154643990</updated>
+    </task>
+    <task id="LOCAL-00005" summary="added tests + mailpit test integration">
+      <option name="closed" value="true" />
+      <created>1780339456317</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1780339456317</updated>
+    </task>
+    <task id="LOCAL-00006" summary="added boilerplate for fastapi endpoints + documentation">
+      <option name="closed" value="true" />
+      <created>1780347494433</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1780347494433</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="setup of test + database" />
+    <MESSAGE value="database models + seed + security logic" />
+    <MESSAGE value="Auth init" />
+    <MESSAGE value="added tests + mailpit test integration" />
+    <MESSAGE value="added boilerplate for fastapi endpoints + documentation" />
+    <option name="LAST_COMMIT_MESSAGE" value="added boilerplate for fastapi endpoints + documentation" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/brobier$pytest_for_backend_app_db_test_init_db_test_init_db.coverage" NAME="pytest for backend.app.db.test_init_db.test_init_db Coverage Results" MODIFIED="1780061311910" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/brobier$pytest_for_backend_services_test_auth_service_TestAuthService.coverage" NAME="pytest for backend.services.test_auth_service.TestAuthService Coverage Results" MODIFIED="1780241349511" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/brobier$pytest_for_backend_app_services_test_sender_test_send_login_code_email_sends_email.coverage" NAME="pytest for backend.services.test_sender.test_send_login_code_email_sends_email Coverage Results" MODIFIED="1780239601864" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/brobier$pytest_for_backend_app_core_test_security_TestGenerateEncryptionKey.coverage" NAME="pytest for backend.app.core.test_security.TestGenerateEncryptionKey Coverage Results" MODIFIED="1780068230119" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/brobier$pytest_for_backend_app_db_test_session_test_get_db.coverage" NAME="pytest for backend.app.db.test_db_session.test_get_db Coverage Results" MODIFIED="1780005911421" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/brobier$pytest_for_backend_services_test_auth_service_TestAuthService_test_request_code.coverage" NAME="pytest for backend.services.test_auth_service.TestAuthService.test_request_code Coverage Results" MODIFIED="1780240615467" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/brobier$security.coverage" NAME="security Coverage Results" MODIFIED="1780067722373" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/backend/core" />
+    <SUITE FILE_PATH="coverage/brobier$pytest_for_backend_app_core_test_security_TestGenerateJwt.coverage" NAME="pytest for backend.app.core.test_security.TestGenerateJwt Coverage Results" MODIFIED="1780067495739" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/brobier$pytest_in_tests.coverage" NAME="pytest in tests Coverage Results" MODIFIED="1780300587691" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/brobier$pytest_for_backend_app_db_test_db_session_test_get_engine.coverage" NAME="pytest for backend.app.db.test_db_session.test_get_engine Coverage Results" MODIFIED="1780062959092" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/brobier$pytest_for_backend_app_core_test_config_test_get_settings.coverage" NAME="pytest for backend.app.core.test_config.test_get_settings Coverage Results" MODIFIED="1780007114382" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/brobier$pytest_for_backend_app_core_test_security_TestEncryptField.coverage" NAME="pytest for backend.app.core.test_security.TestEncryptField Coverage Results" MODIFIED="1780066846635" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+    <SUITE FILE_PATH="coverage/brobier$pytest_for_tests_backend_app_core_test_config_test_get_settings.coverage" NAME="pytest for tests.backend.app.core.test_config.test_get_settings Coverage Results" MODIFIED="1780003750111" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/brobier$pytest_in_test_security_py.coverage" NAME="pytest in test_security.py Coverage Results" MODIFIED="1780068038125" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tests" />
+  </component>
+</project>
