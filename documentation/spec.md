@@ -177,9 +177,6 @@ SMTP_USE_TLS=false
 LOGIN_CODE_EXPIRE_MINUTES=10
 LOGIN_MAX_ATTEMPTS=5
 
-# CORS — JSON list of allowed origins
-CORS_ORIGINS=["http://localhost"]
-
 # Encryption — Fernet key. Generate with: uv run brobier generate-key
 BEER_ENCRYPTION_KEY=
 ```
@@ -1042,7 +1039,7 @@ cd backend && uv run pytest
 | SQL injection | All queries via SQLAlchemy ORM; no raw SQL strings |
 | Secrets in source | Keys only in `.env` files; `.env` is in `.gitignore` |
 | Insecure direct object reference | Ownership check (`beer.user_id == current_user.id`) on every mutating beer endpoint |
-| Overly permissive CORS | `CORS_ORIGINS` env var explicitly lists allowed origins (only `http://localhost` in dev) |
+| Overly permissive CORS | Frontend and backend served same-origin behind `nginx`; no cross-origin requests, so no CORS is configured |
 | Service network exposure | `backend` and `frontend` not bound to host; only `nginx` exposes port 80 |
 | IP address hard-coding | All inter-service references use Docker Compose service names resolved by the internal DNS |
 | Production hardening | `Secure` cookie flag on refresh token; `ENVIRONMENT` env var gates dev-only behaviour |

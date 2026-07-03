@@ -17,4 +17,3 @@ def test_get_settings() -> None:
     assert 'localhost' in settings.database_url
     assert settings.database_url == settings.app_database_url
     assert settings.admin_database_url != settings.app_database_url
-    assert len(settings.cors_origins) >= 1

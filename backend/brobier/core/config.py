@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DATABASE_URL = 'postgresql+psycopg://<user>:<password>@brobier-db-dev:5432/brobier_dev'
@@ -33,20 +33,11 @@ class Settings(BaseSettings):
     login_code_expire_minutes: int = Field(default=10, alias='LOGIN_CODE_EXPIRE_MINUTES')
     login_max_attempts: int = Field(default=5, alias='LOGIN_MAX_ATTEMPTS')
 
-    cors_origins: list[str] = Field(default_factory=lambda: ['http://localhost'], alias='CORS_ORIGINS')
-
     env: Literal['dev', 'tst', 'prd'] = Field(default='dev', alias='ENV')
 
     # Set DB_RECREATE=true to drop and recreate all tables on startup.
     # Never use in production — all data will be lost. Only use in dev or test.
     db_overwrite: bool = Field(default=False, alias='DB_OVERWRITE')
-
-    @field_validator('cors_origins', mode='before')
-    @classmethod
-    def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
-        if isinstance(value, list):
-            return value
-        return [origin.strip() for origin in value.split(',') if origin.strip()]
 
     def _build_database_url(self, user: str | None, password: str | None) -> str:
         return f'postgresql+psycopg://{user}:{password}@{self.db_host}:{self.db_port}/{self.db_name}'
