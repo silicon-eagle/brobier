@@ -38,10 +38,10 @@ Brobier is a private, self-hosted web application that runs an advent-calendar-s
 
 | Layer | Technology |
 |---|---|
-| Backend language | Python 3.14 |
+| Backend language | Python 3.13 |
 | Web framework | FastAPI |
-| ORM | SQLAlchemy |
-| Validation | Pydantic v2 |
+| ORM | SQLAlchemy 2.0 |
+| Validation | Pydantic v2 + pydantic-settings |
 | Database | PostgreSQL 18 |
 | Auth | Passwordless email code + JWT (access token) + refresh token |
 | Token storage | Access JWT in memory (Authorization header); refresh token in HTTP-only cookie |
@@ -52,111 +52,114 @@ Brobier is a private, self-hosted web application that runs an advent-calendar-s
 | Routing | React Router v7 |
 | Styling | Tailwind CSS v4 |
 | API client | Typed fetch wrapper (hand-rolled, no codegen) |
-| Containerisation | Docker + Docker Compose v2 |
+| Package / task runner | uv |
+| CLI | Click (`brobier serve`, `brobier generate-key`) |
+| Containerisation (infra) | Docker + Docker Compose v2 |
 | Reverse proxy | Nginx (Alpine) |
 | Testing | pytest + pytest-asyncio (backend), Vitest + React Testing Library (frontend) |
 | Linting / formatting | Ruff |
 | Type checking | ty |
 | Local email | Mailpit |
+| Application timezone | Europe/Amsterdam (`core/time.py`) |
+
+> The backend package is `brobier` (imported as `brobier.*`). In development it runs
+> on the host via `uv run brobier serve --reload`; only the database, mail catcher,
+> and nginx run in Docker.
 
 ---
 
 ## 3. Infrastructure & Docker Compose
 
-### Services
+In development, Docker Compose runs the **supporting infrastructure only**. The
+FastAPI backend runs on the host with `uv run brobier serve --reload`.
 
-| Service | Image / Build | Purpose | Internal port | Exposed port |
-|---|---|---|---|---|
-| `db` | `postgres:18` | PostgreSQL database | 5432 | 5432 (dev only) |
-| `mailpit` | `axllent/mailpit` | SMTP catch-all + web UI | 1025 (SMTP), 8025 (HTTP) | 8025 |
-| `backend` | `./backend` (custom) | FastAPI application | 8000 | — (nginx only) |
-| `frontend` | `./frontend` (custom) | Vite dev server | 5173 | — (nginx only) |
-| `nginx` | `nginx:alpine` | Reverse proxy entry point | 80 | 80 |
+### Services (`docker-compose.yml`)
 
-All user-facing traffic enters through `nginx` on port 80. The `backend` and `frontend` services are not exposed directly to the host.
+| Service | Image | Purpose | Exposed port(s) |
+|---|---|---|---|
+| `proxy` | `nginx:alpine` | Reverse proxy entry point (`nginx/nginx.conf`) | 80 |
+| `db-dev` | `postgres:18-alpine` | PostgreSQL database (dev) | 5432 |
+| `mailpit` | `axllent/mailpit` | SMTP catch-all + web UI | 1025 (SMTP), 8025 (web) |
 
 ### Docker Compose behaviour
 
-- `backend` depends on `db` being healthy (healthcheck via `pg_isready`).
-- `backend` depends on `mailpit` being started.
-- `frontend` depends on `backend` being started.
-- `nginx` depends on `backend` and `frontend` being started.
-- All inter-service communication uses Docker Compose service names (e.g. `db`, `backend`, `frontend`, `mailpit`). IP addresses are never hard-coded.
-- Environment variables are supplied via `.env` files mounted per service.
+- `db-dev` has a healthcheck via `pg_isready` and restarts unless stopped.
+- Environment variables come from the repo-root `.env` file.
+- The database admin credentials (`POSTGRES_ADMIN_USER` / `POSTGRES_ADMIN_PASSWORD`) create the database; the init script then provisions a least-privilege app role.
 - Volumes:
-  - `postgres_data` persists the database across restarts.
-  - The `backend` source directory is bind-mounted for hot reload in dev.
-  - The `frontend` source directory is bind-mounted for HMR in dev.
-  - The `nginx/nginx.conf` file is bind-mounted so proxy rules can be changed without rebuilding the image.
+  - `db-dev-data` persists PostgreSQL data across restarts.
+  - `./postgres/init` is mounted into `/docker-entrypoint-initdb.d` to run the role-creation script on first boot.
+  - `./data` persists Mailpit messages.
+  - `./nginx/nginx.conf` is bind-mounted so proxy rules can change without rebuilding.
 
-### Backend Dockerfile (development)
+### Database roles (`postgres/init/01-create-app-role.sh`)
 
-- Base: `python:3.14-slim`
-- Install dependencies with `uv sync --frozen` using `pyproject.toml` and `uv.lock`.
-- Run with `uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`.
-- On startup, run `init_db.py` to create tables and seed data if the database is empty.
+On first boot the init script, run as the admin user, creates the application role
+(`POSTGRES_APP_USER`) and grants it least-privilege access:
 
-### Frontend Dockerfile (development)
+- `CONNECT` on the database and `USAGE` on the `public` schema.
+- `SELECT, INSERT, UPDATE, DELETE` on tables and `USAGE, SELECT` on sequences via `ALTER DEFAULT PRIVILEGES`.
+- `USAGE` on types.
 
-- Base: `node:24-alpine`
-- Install with `npm install`.
-- Run `npm run dev -- --host` to expose Vite HMR outside the container.
+The backend connects with the app role for normal queries (`get_app_engine`) and
+with the admin role only to create tables (`get_admin_engine`).
+
+### Backend (host, development)
+
+- Python 3.13, dependencies installed with `uv sync`.
+- Run with `uv run brobier serve --reload` (Click CLI → `uvicorn brobier.main:app`).
+- On startup the FastAPI `lifespan` runs `init_db` (create missing tables, admin role) and `seed_database` (seed calendar entries).
+
+> A `backend/Dockerfile` exists but is not wired into `docker-compose.yml`; the
+> development workflow runs the backend on the host.
 
 ### Nginx configuration (`nginx/nginx.conf`)
 
-- Listen on port 80.
-- Route `/api/` → `http://backend:8000/` (proxy pass, strip `/api` prefix).
-- Route `/` → `http://frontend:5173/` (proxy pass, preserve path).
-- Forward `Host`, `X-Real-IP`, and `X-Forwarded-For` headers on all proxied requests.
-- Enable WebSocket upgrade headers on the frontend upstream to support Vite HMR (`Connection: Upgrade`, `Upgrade: $http_upgrade`).
-- No SSL termination in development; add SSL block for production deployments.
+The committed dev config is intentionally minimal — it listens on port 80 and
+returns `200 OK` on `/` as a placeholder. Production proxying rules (routing to
+the backend/frontend, SSL termination) are added per deployment.
 
 ```nginx
-upstream backend {
-    server backend:8000;
-}
-
-upstream frontend {
-    server frontend:5173;
-}
-
 server {
     listen 80;
-    server_name _;
+    server_name localhost;
 
-    # API traffic → FastAPI
-    location /api/ {
-        proxy_pass         http://backend/;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-    }
-
-    # All other traffic → Vite dev server (including HMR WebSocket)
     location / {
-        proxy_pass         http://frontend/;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_http_version 1.1;
-        proxy_set_header   Upgrade           $http_upgrade;
-        proxy_set_header   Connection        "upgrade";
+        return 200 'OK';
+        add_header Content-Type text/plain;
     }
 }
 ```
-
-> **Note:** The `/api/` prefix is stripped by nginx before forwarding to FastAPI. FastAPI routes therefore do **not** include `/api` in their path definitions. The frontend API client must prefix all requests with `/api`.
 
 ---
 
 ## 4. Environment Configuration
 
-### Backend `.env.example`
+Settings are loaded by `pydantic-settings` from a single repo-root `.env` file
+(see `backend/brobier/core/config.py`). The database URL is **built from parts**
+(`DB_HOST`, `DB_PORT`, `DB_NAME` + per-role credentials), not supplied directly.
+
+### `.env` (see `.env.example`)
 
 ```
-# Database
-DATABASE_URL=postgresql+psycopg://brobier:brobier@db:5432/brobier
+# Environment: dev | tst | prd
+ENV=dev
+
+# Database connection
+DB_HOST=localhost
+DB_NAME=brobier_dev
+DB_PORT=5432
+
+# Application (least-privilege) role — used for normal queries
+POSTGRES_APP_USER=brobier-dev
+POSTGRES_APP_PASSWORD=
+
+# Admin role — used to create the DB/tables and provision the app role
+POSTGRES_ADMIN_USER=postgres
+POSTGRES_ADMIN_PASSWORD=
+
+# Drop & recreate all tables on startup (dev/test only — destroys data)
+DB_OVERWRITE=True
 
 # JWT
 JWT_SECRET=change-me-in-production
@@ -164,31 +167,25 @@ JWT_ACCESS_EXPIRE_MINUTES=15
 JWT_REFRESH_EXPIRE_DAYS=7
 JWT_REFRESH_COOKIE_NAME=brobier_refresh
 
-# Encryption
-BEER_ENCRYPTION_KEY=<Fernet key — generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())">
-
 # Email (Mailpit in dev)
-SMTP_HOST=mailpit
+SMTP_HOST=localhost
 SMTP_PORT=1025
-SMTP_FROM=noreply@brobier.local
+SMTP_FROM=fake-noreply@brobier.local
 SMTP_USE_TLS=false
 
 # Login code
 LOGIN_CODE_EXPIRE_MINUTES=10
+LOGIN_MAX_ATTEMPTS=5
 
-# CORS — allow requests originating from the nginx entry point
-CORS_ORIGINS=http://localhost
+# CORS — JSON list of allowed origins
+CORS_ORIGINS=["http://localhost"]
 
-# Environment
-ENVIRONMENT=development
+# Encryption — Fernet key. Generate with: uv run brobier generate-key
+BEER_ENCRYPTION_KEY=
 ```
 
-### Frontend `.env.example`
-
-```
-# All API calls go through the nginx reverse proxy at /api
-VITE_API_BASE_URL=http://localhost/api
-```
+> `JWT_ACCESS_EXPIRE_MINUTES` defaults to `60` in code if unset; the example env
+> pins it to `15`. `LOGIN_MAX_ATTEMPTS` wrong codes deactivate a user's login codes.
 
 ---
 
@@ -205,8 +202,11 @@ All models use SQLAlchemy. Table creation runs at startup via `Base.metadata.cre
 | `display_name` | `str` | not null |
 | `role` | `enum("user","admin")` | not null, default `"user"` |
 | `is_active` | `bool` | not null, default `True` |
-| `created_at` | `datetime` | not null, default `utcnow` |
+| `nr_wrong_login_attempts` | `int` | not null, default `0` |
+| `created_at` | `datetime` | not null, default `now()` |
 | `updated_at` | `datetime` | not null, updated on save |
+
+- `nr_wrong_login_attempts` is incremented on each failed verify; when it reaches `LOGIN_MAX_ATTEMPTS` the user's login codes are deactivated and the counter resets.
 
 ### 5.2 LoginCode
 
@@ -216,12 +216,14 @@ All models use SQLAlchemy. Table creation runs at startup via `Base.metadata.cre
 | `user_id` | `UUID` | FK → User, not null |
 | `code_hash` | `str` | not null |
 | `expires_at` | `datetime` | not null |
+| `is_active` | `bool` | not null, default `True` |
 | `used_at` | `datetime` | nullable |
-| `created_at` | `datetime` | not null, default `utcnow` |
+| `created_at` | `datetime` | not null, default `now()` |
 | `updated_at` | `datetime` | not null, updated on save |
 
-- A code is valid if `used_at IS NULL` and `expires_at > now`.
+- A code is valid if `used_at IS NULL`, `is_active = True`, and `expires_at > now`.
 - On use, set `used_at = now` immediately (single-use).
+- Too many wrong attempts flips `is_active = False` for the user's codes.
 
 ### 5.3 RefreshToken
 
@@ -244,14 +246,17 @@ All models use SQLAlchemy. Table creation runs at startup via `Base.metadata.cre
 |---|---|---|
 | `id` | `int` | PK, autoincrement |
 | `user_id` | `UUID` | FK → User, not null |
+| `year` | `int` | not null, indexed, check year ≥ 2020 |
 | `beer_name_encrypted` | `str` | not null |
 | `brewery_encrypted` | `str` | not null |
 | `untappd_url_encrypted` | `str` | nullable |
 | `comment_encrypted` | `str` | nullable |
 | `bought_from` | `str` | not null |
 | `bought_at` | `datetime` | not null |
-| `created_at` | `datetime` | not null, default `utcnow` |
+| `created_at` | `datetime` | not null, default `now()` |
 | `updated_at` | `datetime` | not null, updated on save |
+
+- `year` scopes a beer to a calendar edition; a beer can only be assigned to a calendar day of the **same** year.
 
 ### 5.5 CalendarEntry
 
@@ -296,11 +301,12 @@ DATABASE RELATIONSHIP DIAGRAM (ASCII)
     +------------------------+             1 ---- *             +------------------------+
     |          User          |--------------------------------->|       BeerEntry        |
     |------------------------|                                  |------------------------|
-    | PK id (int)            |<---------------------------------| PK id (int)            |
+    | PK id (UUID)           |<---------------------------------| PK id (int)            |
     | email (UNIQUE, INDEX)  |          * ---- 1               | FK user_id -> User.id  |
-    | display_name           |                                  | beer_name_encrypted    |
-    | role, is_active        |<---------------------------------| brewery_encrypted      |
-    | created_at, updated_at |          * ---- 1               | untappd_url_encrypted? |
+    | display_name           |                                  | year (INDEX, >= 2020)  |
+    | role, is_active        |<---------------------------------| beer_name_encrypted    |
+    | nr_wrong_login_attempts|          * ---- 1               | brewery_encrypted      |
+    | created_at, updated_at |                                  | untappd_url_encrypted? |
     +------------------------+                                  | comment_encrypted?     |
               ^    ^                                            | bought_from            |
               |    | * ---- 1                                   | bought_at              |
@@ -310,7 +316,7 @@ DATABASE RELATIONSHIP DIAGRAM (ASCII)
               |  |------------------------|                               | 1 ---- *
               |  | PK id (int)            |                               v
               |  | FK user_id -> User.id  |                    +------------------------+
-              |  | code_hash              |                    |      UserRating        |
+              |  | code_hash, is_active   |                    |      UserRating        |
               |  | expires_at, used_at    |                    |------------------------|
               |  | created_at, updated_at |                    | PK id (int)            |
               |  +------------------------+                    | FK user_id -> User.id  |
@@ -362,16 +368,17 @@ Use `cryptography.fernet.Fernet` for authenticated symmetric encryption (AES-128
 - The key is never written to the database.
 - Generate once with `Fernet.generate_key().decode()`.
 
-### Helper functions (`backend/app/core/security.py`)
+### Helper functions (`backend/brobier/core/security.py`)
 
 ```python
-def encrypt_field(value: str | None) -> str | None: ...
-def decrypt_field(value: str | None) -> str | None: ...
+def encrypt_field(value: str) -> str: ...
+def decrypt_field(value: str) -> str: ...
+def generate_encryption_key(file: Path | None = None) -> str: ...
 ```
 
-- `encrypt_field` returns `None` if `value` is `None`.
-- `decrypt_field` returns `None` if `value` is `None`.
-- Both raise an application error if the key is missing or decryption fails.
+- `encrypt_field` / `decrypt_field` operate on non-null strings; callers pass `None` through explicitly for optional fields (`untappd_url`, `comment`).
+- `decrypt_field` raises `ValueError` if the token is invalid or tampered; `_get_fernet` raises `RuntimeError` if `BEER_ENCRYPTION_KEY` is unset.
+- `generate_encryption_key` (exposed as `brobier generate-key`) creates a Fernet key and appends it to `.env`.
 
 ### Where encryption/decryption happens
 
@@ -406,8 +413,9 @@ def decrypt_field(value: str | None) -> str | None: ...
 
 3. POST /auth/refresh
    → Reads the refresh token from the HTTP-only cookie.
-   → Validates it: not revoked, not expired, hash matches a DB row.
-   → Issues a new JWT access token (15-minute expiry).
+   → Validates it: not revoked, not expired, hash matches a DB row, user still active.
+   → Rotates the token: revokes the old row, stores a new hashed refresh token, and sets a new cookie.
+   → Issues a new JWT access token.
    → Returns { access_token, token_type: "bearer" } in the response body.
    → Returns 401 if the refresh token is absent, invalid, or expired.
 
@@ -424,8 +432,8 @@ def decrypt_field(value: str | None) -> str | None: ...
 ### 7.2 JWT access token
 
 - Algorithm: `HS256` signed with `JWT_SECRET`.
-- Expiry: `JWT_ACCESS_EXPIRE_MINUTES` (default **15 minutes**).
-- Payload claims: `sub` (user id as string), `exp`, `iat`.
+- Expiry: `JWT_ACCESS_EXPIRE_MINUTES` (example env: **15 minutes**; code default 60).
+- Payload claims: `sub` (user id as string), `role`, `iat`, `exp`.
 - Transmitted by the client in the `Authorization: Bearer <token>` header.
 - **Not stored in the database** — validated purely by signature and expiry.
 
@@ -434,34 +442,36 @@ def decrypt_field(value: str | None) -> str | None: ...
 - Name: `JWT_REFRESH_COOKIE_NAME` from config (default `brobier_refresh`).
 - `HttpOnly: true`
 - `SameSite: Lax`
-- `Secure: true` in production; `false` in development.
-- `Path: /auth/refresh` (scoped so it is only sent to the refresh endpoint).
+- `Secure: true` when `ENV=prd`; `false` otherwise.
+- `Path: /auth` (sent to every `/auth/*` endpoint, including refresh and logout).
 - Expiry: `JWT_REFRESH_EXPIRE_DAYS` (default 7 days).
 - Only the SHA-256 hash of the raw token value is stored in the `refresh_tokens` table.
+- Refresh **rotates** the token on every use (old row revoked, new cookie set).
 
 ### 7.4 Auth dependencies
 
 ```python
-async def get_current_user(request: Request, db: Session) -> User:
+async def get_current_user(request: Request) -> User:
     # 1. Read Bearer token from Authorization header.
     # 2. Decode and verify JWT (signature + expiry) using JWT_SECRET.
     # 3. Extract user id from the `sub` claim.
-    # 4. Load and return the User from the database.
-    # 5. Raise HTTP 401 if the token is absent, malformed, expired, or the user no longer exists.
+    # 4. Load the User from the database (its own Session).
+    # 5. Raise HTTP 401 if the token is absent, malformed, expired, or the user is missing/inactive.
 
-async def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role != "admin":
-        raise HTTPException(403)
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != UserRole.admin:
+        raise HTTPException(403, 'Admin access required.')
     return current_user
 ```
 
 ### 7.5 Login code details
 
-- Code: 6 random decimal digits (`secrets.randbelow` or `str(secrets.token_hex(3)).zfill(6)` resampled to 6 digits).
-- Hash: `hashlib.sha256(code.encode()).hexdigest()` — fast is acceptable because codes are short-lived (10 min) and rate-limiting is acceptable at the application layer.
+- Code: 6 random decimal digits (`secrets.choice(string.digits)` × 6).
+- Hash: `hashlib.sha256(code.encode()).hexdigest()` — fast is acceptable because codes are short-lived (10 min).
 - Expiry: `now + timedelta(minutes=LOGIN_CODE_EXPIRE_MINUTES)`.
 - Single-use: `used_at` is set on first successful verification.
-- Old unused codes for the same user can be left in the database; only the most recently created valid code is accepted per user per verification attempt (or alternatively, invalidate prior codes on new request).
+- Requesting a new code resets the user's wrong-attempt counter.
+- After `LOGIN_MAX_ATTEMPTS` failed verifications, the user's codes are set `is_active = False` and the counter resets.
 
 ---
 
@@ -551,25 +561,27 @@ All require a valid JWT in the `Authorization: Bearer <token>` header.
 - **Response 404:** beer entry not found, or current user has not yet rated this beer.
 
 #### `GET /leaderboard`
-- Returns all active users ranked by total beer count, descending.
+- Returns non-admin users ranked by beer count for a year, descending (ties broken by display name).
+- Optional query param: `year` (int). If omitted, defaults to the current year.
+- Users with zero beers that year are still listed with `beer_count = 0`.
 - **Response 200:** `[ { "display_name": string, "beer_count": int } ]`
 
 #### `GET /calendar`
-- Returns all 24 calendar entries with unlock-aware content for a single year.
-- Optional query param: `year` (int). If omitted, default to current UTC year.
-- Locked entries return only safe fields (day, unlock_date, title).
+- Returns all calendar entries with unlock-aware content for a single year.
+- Optional query param: `year` (int). If omitted, defaults to the current year.
+- Locked entries return only safe fields (`id`, `year`, `day`, `unlock_date`, `is_locked`).
 - Unlocked entries return full content and decrypted beer details if a beer is linked.
 - **Response 200:** `[ CalendarEntryOut ]`
 
-#### `GET /calendar/{day}`
-- Returns a single calendar entry (1–24) for a single year.
-- Optional query param: `year` (int). If omitted, default to current UTC year.
-- Same unlock-aware logic as above.
+#### `GET /calendar/{year}/{day}`
+- Returns a single calendar entry for the given `year` and `day` (1–24), both path params.
+- **Day-gated:** returns `403` if the day is still locked (`unlock_date > now`) instead of the locked schema.
 - **Response 200:** `CalendarEntryOut`
+- **Response 403:** day not yet unlocked.
 - **Response 404:** day/year not found.
 
 #### `GET /calendar/years`
-- Returns available calendar years (descending) so the UI can browse history.
+- Returns available calendar years (ascending) so the UI can browse history.
 - **Response 200:** `[ { "year": int } ]`
 
 ---
@@ -580,82 +592,88 @@ All require a valid JWT with role `admin` in the `Authorization: Bearer <token>`
 
 #### `GET /admin/users`
 - Returns all users.
-- **Response 200:** `[ UserOut ]`
+- **Response 200:** `[ AdminUserOut ]`
 
 #### `POST /admin/users`
 - Creates a new user.
 - **Request body:** `UserCreate { email, display_name, role?, is_active? }`
-- **Response 201:** `UserOut`
+- **Response 201:** `AdminUserOut`
 - **Response 409:** email already exists.
 
 #### `PUT /admin/users/{user_id}`
 - Updates user fields (display_name, role, is_active).
 - **Request body:** `UserUpdate` (all fields optional).
-- **Response 200:** `UserOut`
+- **Response 200:** `AdminUserOut`
+- **Response 404:** user not found.
 
 #### `POST /admin/users/{user_id}/deactivate`
 - Sets `is_active = False`.
-- **Response 200:** `UserOut`
+- **Response 200:** `AdminUserOut`
 
 #### `POST /admin/users/{user_id}/activate`
 - Sets `is_active = True`.
-- **Response 200:** `UserOut`
+- **Response 200:** `AdminUserOut`
 
 #### `GET /admin/beers`
 - Returns all beer entries for all users, decrypted, with owner display name.
+- Optional query param: `year` (int) to filter by calendar year.
 - **Response 200:** `[ AdminBeerEntryOut ]`
 
 #### `GET /admin/calendar`
-- Returns all 24 calendar entries with full content (ignores unlock date) for a single year.
-- Optional query param: `year` (int). If omitted, default to current UTC year.
+- Returns all calendar entries with full content (ignores unlock date) for a single year.
+- Optional query param: `year` (int). If omitted, defaults to the current year.
 - Includes decrypted beer details for any linked beer.
 - **Response 200:** `[ AdminCalendarEntryOut ]`
 
-#### `POST /admin/calendar`
-- Creates a calendar entry for a specific year.
-- **Request body:** `CalendarEntryCreate { year, day, unlock_date, title, content, image_url? }`
-- **Response 201:** `AdminCalendarEntryOut`
-- **Response 409:** day already exists for that year.
-
-#### `PUT /admin/calendar/{entry_id}`
-- Updates a calendar entry (does not touch beer assignment).
-- **Request body:** `CalendarEntryUpdate` (all fields optional).
-- **Response 200:** `AdminCalendarEntryOut`
-
-#### `DELETE /admin/calendar/{entry_id}`
-- Deletes a calendar entry. Does not delete the linked beer entry.
+#### `PUT /admin/calendar/{year}`
+- Creates the 24 calendar days for the given year. Existing days are skipped (idempotent).
 - **Response 204:** no content.
 
-#### `PUT /admin/calendar/{entry_id}/beer`
-- Assigns a beer entry to a calendar day in a specific year (identified by `entry_id`).
-- **Request body:** `{ "beer_entry_id": UUID }`
-- Enforces uniqueness: a beer entry can only be assigned to one day.
-- **Response 200:** `AdminCalendarEntryOut`
-- **Response 404:** beer entry not found.
-- **Response 409:** beer already assigned to another day.
+#### `DELETE /admin/calendar/{year}`
+- Deletes all calendar days for the given year.
+- **Response 204:** no content.
+- **Response 409:** at least one day of that year has an assigned beer.
 
-#### `DELETE /admin/calendar/{entry_id}/beer`
+#### `PUT /admin/calendar/{year}/{day}/beer`
+- Assigns a beer entry to the calendar day identified by `year` + `day`.
+- **Request body:** `{ "beer_entry_id": int }`
+- Enforces: the beer must exist, belong to the same `year`, and not already be assigned elsewhere.
+- **Response 200:** `AdminCalendarEntryOut`
+- **Response 404:** calendar entry or beer entry not found.
+- **Response 409:** beer belongs to a different year, or is already assigned to a day.
+
+#### `DELETE /admin/calendar/{year}/{day}/beer`
 - Unassigns the beer entry from the calendar day (sets `beer_entry_id = null`).
 - **Response 200:** `AdminCalendarEntryOut`
+- **Response 404:** calendar entry not found.
+
+> There is no per-entry `POST/PUT/DELETE /admin/calendar/{entry_id}` in the current
+> implementation — days are created/removed a whole year at a time, and a day's
+> title/content are seeded (not yet editable over the API).
 
 ---
 
 ### 8.4 Response schemas (Pydantic)
 
-#### `UserOut`
+#### `UserOut` (auth `/auth/me`, `/auth/verify-code`)
+```
+id, display_name, role
+```
+
+#### `AdminUserOut` (admin user endpoints)
 ```
 id, email, display_name, role, is_active, created_at, updated_at
 ```
 
 #### `BeerEntryOut`
 ```
-id, user_id, beer_name, brewery, untappd_url, comment, bought_from, bought_at, created_at, updated_at
+id, user_id, year, beer_name, brewery, untappd_url, comment, bought_from, bought_at, created_at, updated_at
 ```
 (All encrypted fields decrypted in this schema. Encrypted column names are internal only.)
 
 #### `AdminBeerEntryOut`
 ```
-id, user_id, display_name (owner), beer_name, brewery, untappd_url, comment, bought_from, bought_at, created_at, updated_at
+id, user_id, display_name (owner), year, beer_name, brewery, untappd_url, comment, bought_from, bought_at, created_at, updated_at
 ```
 
 #### `UserRatingOut`
@@ -667,7 +685,7 @@ id, user_id, beer_entry_id, rating, comment, drank_at, created_at, updated_at
 
 Locked state:
 ```
-id, year, day, unlock_date, title, is_locked: true
+id, year, day, unlock_date, is_locked: true   # title, content, image_url, beer are null
 ```
 
 Unlocked state:
@@ -678,7 +696,7 @@ beer?: { id, beer_name, brewery, untappd_url, comment, bought_from, submitted_by
 
 #### `AdminCalendarEntryOut` (admin-facing, full data)
 ```
-id, year, day, unlock_date, title, content, image_url,
+year, day, unlock_date, title, content, image_url,
 beer_entry_id,
 beer?: { id, user_id, display_name, beer_name, brewery, untappd_url, comment, bought_from, bought_at, ratings: [UserRatingOut] }
 ```
@@ -689,26 +707,30 @@ beer?: { id, user_id, display_name, beer_name, brewery, untappd_url, comment, bo
 
 | Action | Rule |
 |---|---|
-| View own beers | Authenticated; `beer.user_id == current_user.id` |
+| View own beers | Authenticated; query filters by `beer.user_id == current_user.id` |
 | Create beer | Authenticated |
-| Edit own beer | Authenticated; `beer.user_id == current_user.id`; beer not assigned to calendar |
-| Delete own beer | Authenticated; `beer.user_id == current_user.id`; beer not assigned to calendar |
+| Edit own beer | Authenticated; update query filters by `user_id` (others' beers → 404) |
+| Delete own beer | Authenticated; owner-scoped; blocked (409) if beer is assigned to a calendar day or already has a rating |
 | Submit rating | Authenticated; any user may rate any beer; one rating per user per beer |
 | Edit own rating | Authenticated; `rating.user_id == current_user.id` |
 | Delete own rating | Authenticated; `rating.user_id == current_user.id` |
-| View leaderboard | Authenticated |
-| View calendar | Authenticated; year defaults to current UTC year; locked entries return only safe fields |
-| View locked beer | Blocked server-side regardless of auth level for non-admins |
+| View leaderboard | Authenticated (router currently has no auth dependency); admins excluded from results |
+| View calendar | Authenticated; year defaults to current year; locked entries return only safe fields |
+| View locked beer | Blocked server-side; a locked single day returns `403` |
 | All `/admin/*` routes | Role must be `"admin"` |
-| Assign/unassign beer | Admin only (`PUT /admin/calendar/{id}/beer`, `DELETE /admin/calendar/{id}/beer`) |
-| Edit/delete any beer | Admin only (`GET /admin/beers` read; edit/delete via admin routes) |
+| Assign/unassign beer | Admin only (`PUT`/`DELETE /admin/calendar/{year}/{day}/beer`) |
+| View any beer | Admin only (`GET /admin/beers`) |
 | Create/edit/delete users | Admin only |
+| Create/delete calendar years | Admin only |
 
 ---
 
 ## 10. Seed Data
 
-Seed data is inserted at startup if the `users` table is empty (idempotent check).
+Seeding runs at startup (`seeds/seed.py`). Each seeder is idempotent: it only
+inserts rows when its table has not been seeded yet. The FastAPI `lifespan`
+currently seeds **calendar entries**; the users seeder is available and runs when
+the `users` table is empty.
 
 ### Admin user
 
@@ -723,28 +745,28 @@ is_active: true
 
 ```
 email: alice@brobier.local, display_name: Alice, role: user, is_active: true
-email: bob@brobier.local, display_name: Bob, role: user, is_active: true
+email: bob@brobier.local,   display_name: Bob,   role: user, is_active: true
 email: carol@brobier.local, display_name: Carol, role: user, is_active: true
-email: dave@brobier.local, display_name: Dave, role: user, is_active: false
+email: dave@brobier.local,  display_name: Dave,  role: user, is_active: false
 ```
-
-### Sample beer entries
-
-At least 3 beer entries per active participant (Alice, Bob, Carol), covering a variety of ratings.
 
 ### Calendar entries
 
-24 entries, one per day, per year:
-- `year`: current UTC year for new seed runs
-- `day`: 1–24
-- `unlock_date`: December 1–24 of that `year` at 08:00 UTC
-- `title`: e.g., "Day 1", "Day 2", …
-- `content`: placeholder description text
-- `image_url`: null
-- `beer_entry_id`: null (admin assigns later)
+The calendar seeder creates all 24 days for **three years**: previous, current,
+and next (`current_year - 1`, `current_year`, `current_year + 1`). For each year:
 
-The seed should assign a few beer entries to early calendar days (days 1–5) for demo purposes in the seeded year.
-If prior years already exist, seeding must keep them unchanged and only insert missing rows for the target year.
+- `day`: 1–24
+- `unlock_date`: December `day` of that year at 08:00 in the app timezone (Europe/Amsterdam)
+- `title`: `"Day {day}"`
+- `content`: empty string
+- `image_url`: null
+- `beer_entry_id`: null (admins assign beers later)
+
+Existing days for a year are preserved; only missing days are inserted, so prior
+years are never overwritten.
+
+> Beer entries and ratings are **not** seeded automatically. Admins create the
+> calendar structure and assign beers via the admin API.
 
 ---
 
@@ -821,53 +843,70 @@ TypeScript interfaces mirroring backend response schemas:
 
 ```
 brobier/
-├── docker-compose.yml
-├── .env.example               ← root-level reference (not used directly)
+├── docker-compose.yml         ← dev infra: proxy (nginx), db-dev (postgres), mailpit
+├── .env.example               ← root-level env reference (loaded by the backend)
 │
 ├── nginx/
-│   └── nginx.conf             ← reverse proxy configuration
+│   └── nginx.conf             ← reverse proxy config (placeholder in dev)
+│
+├── postgres/
+│   └── init/
+│       └── 01-create-app-role.sh  ← provisions least-privilege app role
 │
 ├── backend/
-│   ├── Dockerfile
+│   ├── Dockerfile             ← present but not used by docker-compose
 │   ├── pyproject.toml
 │   ├── uv.lock
-│   ├── .env.example
-│   └── app/
-│       ├── main.py
+│   └── brobier/
+│       ├── main.py            ← FastAPI app, routers, lifespan (init + seed)
+│       ├── cli.py             ← `brobier serve`, `brobier generate-key`
 │       ├── core/
-│       │   ├── config.py      ← Pydantic Settings
-│       │   └── security.py    ← hashing, encryption helpers
+│       │   ├── config.py      ← pydantic-settings Settings
+│       │   ├── security.py    ← Fernet encrypt/decrypt, key generation
+│       │   ├── exceptions.py  ← typed AppError hierarchy
+│       │   └── time.py        ← app timezone + current_time()
 │       ├── db/
-│       │   ├── session.py     ← engine + get_db dependency
-│       │   └── init_db.py     ← create_all + seed
-│       ├── models/
-│       │   ├── user.py
-│       │   ├── login_code.py
-│       │   ├── refresh_token.py
-│       │   ├── beer_entry.py
-│       │   └── calendar_entry.py
+│       │   ├── engine.py      ← app/admin engines
+│       │   ├── init_db.py     ← create/drop/recreate tables
+│       │   ├── utils.py       ← Table enum
+│       │   └── models/
+│       │       ├── base.py
+│       │       ├── user.py
+│       │       ├── login_code.py
+│       │       ├── refresh_token.py
+│       │       ├── beer_entry.py
+│       │       ├── calendar_entry.py
+│       │       └── user_rating.py
 │       ├── schemas/
 │       │   ├── auth.py
-│       │   ├── user.py
+│       │   ├── admin.py
 │       │   ├── beer.py
-│       │   └── calendar.py
+│       │   ├── calendar.py
+│       │   ├── leaderboard.py
+│       │   └── user_rating.py
 │       ├── api/
 │       │   └── routes/
-│       │       ├── health.py
 │       │       ├── auth.py
 │       │       ├── beers.py
 │       │       ├── leaderboard.py
 │       │       ├── calendar.py
-│       │       └── admin.py
+│       │       └── admin/
+│       │           ├── users.py
+│       │           ├── beers.py
+│       │           └── calendar.py
 │       ├── services/
 │       │   ├── auth_service.py
-│       │   ├── beer_service.py
+│       │   ├── beers_service.py
 │       │   ├── calendar_service.py
-│       │   └── admin_service.py
+│       │   ├── leaderboard_service.py
+│       │   ├── user_service.py
+│       │   └── sender.py       ← send_login_code_email()
 │       ├── auth/
-│       │   └── dependencies.py ← get_current_user, require_admin
-│       ├── email/
-│       │   └── sender.py       ← send_login_code()
+│       │   ├── dependencies.py ← get_current_user, require_admin, get_refresh_token_raw
+│       │   ├── jwt.py          ← create/decode access token
+│       │   └── tokens.py       ← code/refresh token generation + hashing
+│       ├── templates/
+│       │   └── email/          ← Jinja login-code templates
 │       └── seeds/
 │           └── seed.py
 │
@@ -931,39 +970,59 @@ brobier/
 
 ## 14. Development Workflow
 
-### Start everything
+### Start the infrastructure
 
 ```bash
-docker compose up --build
+cp .env.example .env      # then fill in the blank secrets
+docker compose up -d
 ```
 
-- Application (via nginx): http://localhost
-- API (via nginx proxy): http://localhost/api
-- API docs (Swagger, via nginx): http://localhost/api/docs
-- Mailpit web UI (direct): http://localhost:8025
-- PostgreSQL (direct, dev only): localhost:5432
+This starts nginx (`proxy`), PostgreSQL (`db-dev`), and Mailpit.
+
+- Nginx entry point: http://localhost (placeholder `OK` in dev)
+- Mailpit web UI: http://localhost:8025
+- PostgreSQL (dev only): localhost:5432
+
+### Run the backend (host)
+
+```bash
+cd backend
+uv sync
+uv run brobier generate-key   # once, to populate BEER_ENCRYPTION_KEY in .env
+uv run brobier serve --reload
+```
+
+- API: http://localhost:8000
+- Swagger docs: http://localhost:8000/docs
+- Health check: http://localhost:8000/health
+
+On startup the backend creates missing tables and seeds calendar entries.
 
 ### First login
 
-1. Open http://localhost:5173/login.
-2. Enter `alice@brobier.local` (or any seeded user email).
-3. Open http://localhost:8025 to read the login code email.
-4. Enter the code in the app.
+1. `POST /auth/request-code` with `alice@brobier.local` (or any seeded user email).
+2. Open http://localhost:8025 to read the login code email.
+3. `POST /auth/verify-code` with the email + code to receive an access token and refresh cookie.
 
 ### Admin login
 
-1. Enter `admin@brobier.local` at the login page.
-2. Retrieve code from Mailpit.
-3. Admin nav will appear after login.
+Use `admin@brobier.local` and the same flow; the returned user has `role = admin`.
 
 ### Reset the database
 
 ```bash
-docker compose down -v
-docker compose up --build
+docker compose down -v    # drops the db-dev-data volume
+docker compose up -d
 ```
 
-This drops the `postgres_data` volume and recreates/reseeds the database.
+Alternatively, set `DB_OVERWRITE=true` in `.env` (dev/test only) to drop and
+recreate all tables on the next backend startup.
+
+### Run the tests
+
+```bash
+cd backend && uv run pytest
+```
 
 ---
 

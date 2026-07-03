@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Tests
+tests/
+
+# Local env / secrets
+.env
+.env.*
+
+# Editor / IDE
+.idea/
+.vscode/
+
+# Logs
+.log/
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore

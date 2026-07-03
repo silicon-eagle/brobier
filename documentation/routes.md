@@ -1,20 +1,8 @@
 # Brobier — API Routes Reference
 
-All routes are served under the nginx reverse proxy at `http://localhost` (dev).
-Backend routes are proxied from `/api/*` by default (adjust if nginx config differs).
-
----
-
-## Legend
-
-| Symbol | Meaning |
-|--------|---------|
-| ✅ | Implemented |
-| ❌ | Not yet implemented |
-| 🔓 | No authentication required |
-| 🔑 | Requires valid JWT (`Authorization: Bearer <token>`) |
-| 🛡️ | Requires JWT with `role = admin` |
-| 🍪 | Requires valid `brobier_refresh` HTTP-only cookie |
+In development the FastAPI backend runs on the host and is reachable directly at
+`http://localhost:8000`. Routes below use paths relative to that base and do **not**
+include an `/api` prefix.
 
 ---
 
@@ -23,6 +11,7 @@ Backend routes are proxied from `/api/*` by default (adjust if nginx config diff
 | Status | Method | Path | Auth | Summary |
 |--------|--------|------|------|---------|
 | ✅ | `GET` | `/health` | 🔓 | Returns `{ "status": "ok" }` |
+| ✅ | `GET` | `/healthz` | 🔓 | Alias of `/health` |
 
 ---
 
@@ -30,11 +19,13 @@ Backend routes are proxied from `/api/*` by default (adjust if nginx config diff
 
 | Status | Method | Path | Auth | Summary | Request body | Success response |
 |--------|--------|------|------|---------|--------------|-----------------|
-| ❌ | `POST` | `/auth/request-code` | 🔓 | Generate and email a login code | `{ email }` | `200 { message }` |
-| ❌ | `POST` | `/auth/verify-code` | 🔓 | Verify code → issue access token + set refresh cookie | `{ email, code }` | `200 { access_token, token_type, user }` |
-| ❌ | `POST` | `/auth/refresh` | 🍪 | Exchange refresh cookie for a new access token | — | `200 { access_token, token_type }` |
-| ❌ | `POST` | `/auth/logout` | 🍪 | Revoke refresh token, clear cookie | — | `200 { message }` |
-| ❌ | `GET` | `/auth/me` | 🔑 | Return current user | — | `200 UserOut` |
+| ✅ | `POST` | `/auth/request-code` | 🔓 | Generate and email a login code | `{ email }` | `200 { message }` |
+| ✅ | `POST` | `/auth/verify-code` | 🔓 | Verify code → issue access token + set refresh cookie | `{ email, code }` | `200 { access_token, token_type, user }` |
+| ✅ | `POST` | `/auth/refresh` | 🍪 | Rotate refresh cookie → new access token (+ new refresh cookie) | — | `200 { access_token, token_type }` |
+| ✅ | `POST` | `/auth/logout` | 🍪 | Revoke refresh token, clear cookie | — | `200 { message }` |
+| ✅ | `GET` | `/auth/me` | 🔑 | Return current user | — | `200 UserOut { id, display_name, role }` |
+
+> `POST /auth/refresh` **rotates** the refresh token: it revokes the presented token and sets a brand-new `brobier_refresh` cookie alongside the new access token.
 
 ### Error responses (auth)
 
@@ -53,25 +44,28 @@ All require `🔑 JWT`.
 
 | Status | Method | Path | Summary | Request body | Success response |
 |--------|--------|------|---------|--------------|-----------------|
-| ❌ | `GET` | `/beers/me` | Current user's beer entries (decrypted) | — | `200 [ BeerEntryOut ]` |
-| ❌ | `POST` | `/beers` | Create a new beer entry | `BeerEntryCreate` | `201 BeerEntryOut` |
-| ❌ | `PUT` | `/beers/{beer_id}` | Update own beer entry | `BeerEntryUpdate` (all fields optional) | `200 BeerEntryOut` |
-| ❌ | `DELETE` | `/beers/{beer_id}` | Delete own beer entry | — | `204 No Content` |
+| ✅ | `GET` | `/beers/me` | Current user's beer entries (decrypted) | — | `200 [ BeerEntryOut ]` |
+| ✅ | `POST` | `/beers` | Create a new beer entry | `BeerEntryCreate` | `201 BeerEntryOut` |
+| ✅ | `PUT` | `/beers/{beer_id}` | Update own beer entry | `BeerEntryUpdate` (all fields optional) | `200 BeerEntryOut` |
+| ✅ | `DELETE` | `/beers/{beer_id}` | Delete own beer entry | — | `204 No Content` |
+
+Ownership is enforced inside the service layer: update and delete queries filter by
+`user_id`, so another user's beer is simply reported as not found (`404`).
 
 ### `BeerEntryCreate` fields
-`beer_name`, `brewery`, `untappd_url?`, `comment?`, `bought_from`, `bought_at`
+`year`, `beer_name`, `brewery`, `untappd_url?`, `comment?`, `bought_from`, `bought_at`
 
 ### `BeerEntryOut` fields
-`id`, `user_id`, `beer_name`, `brewery`, `untappd_url`, `comment`, `bought_from`, `bought_at`, `created_at`, `updated_at`
+`id`, `user_id`, `year`, `beer_name`, `brewery`, `untappd_url`, `comment`, `bought_from`, `bought_at`, `created_at`, `updated_at`
 
 ### Error responses (beers)
 
 | Endpoint | Code | Detail |
 |----------|------|--------|
-| `PUT /beers/{id}` | `403` | Not the owner |
-| `PUT /beers/{id}` | `409` | Beer is assigned to a calendar entry |
-| `DELETE /beers/{id}` | `403` | Not the owner |
-| `DELETE /beers/{id}` | `409` | Beer is assigned to a calendar entry |
+| `PUT /beers/{id}` | `404` | `"Beer not found."` (missing or not owned) |
+| `DELETE /beers/{id}` | `404` | `"Beer not found."` (missing or not owned) |
+| `DELETE /beers/{id}` | `409` | `"Cannot delete beer assigned to a calendar day."` |
+| `DELETE /beers/{id}` | `409` | `"Cannot delete beer with existing rating."` |
 
 ---
 
@@ -81,9 +75,9 @@ All require `🔑 JWT`.
 
 | Status | Method | Path | Summary | Request body | Success response |
 |--------|--------|------|---------|--------------|-----------------|
-| ❌ | `POST` | `/beers/{beer_id}/ratings` | Submit a rating for a beer | `UserRatingCreate` | `201 UserRatingOut` |
-| ❌ | `PUT` | `/beers/{beer_id}/ratings/me` | Update current user's rating | `UserRatingUpdate` (all fields optional) | `200 UserRatingOut` |
-| ❌ | `DELETE` | `/beers/{beer_id}/ratings/me` | Delete current user's rating | — | `204 No Content` |
+| ✅ | `POST` | `/beers/{beer_id}/ratings` | Submit a rating for a beer | `UserRatingCreate` | `201 UserRatingOut` |
+| ✅ | `PUT` | `/beers/{beer_id}/ratings/me` | Update current user's rating | `UserRatingUpdate` (all fields optional) | `200 UserRatingOut` |
+| ✅ | `DELETE` | `/beers/{beer_id}/ratings/me` | Delete current user's rating | — | `204 No Content` |
 
 ### `UserRatingCreate` fields
 `rating` (1.0–5.0), `comment?`, `drank_at?`
@@ -95,18 +89,20 @@ All require `🔑 JWT`.
 
 | Endpoint | Code | Detail |
 |----------|------|--------|
-| `POST /beers/{beer_id}/ratings` | `404` | Beer entry not found |
-| `POST /beers/{beer_id}/ratings` | `409` | User has already rated this beer |
-| `PUT /beers/{beer_id}/ratings/me` | `404` | Beer not found, or user has no rating yet |
-| `DELETE /beers/{beer_id}/ratings/me` | `404` | Beer not found, or user has no rating yet |
+| `POST /beers/{beer_id}/ratings` | `404` | `"Beer not found."` |
+| `POST /beers/{beer_id}/ratings` | `409` | `"Rating already exists."` |
+| `PUT /beers/{beer_id}/ratings/me` | `404` | `"Rating not found."` |
+| `DELETE /beers/{beer_id}/ratings/me` | `404` | `"Rating not found."` |
 
 ---
 
 ## Leaderboard — `/leaderboard`
 
-| Status | Method | Path | Auth | Summary | Success response |
-|--------|--------|------|------|---------|-----------------|
-| ❌ | `GET` | `/leaderboard` | 🔑 | Active users ranked by beer count | `200 [ { display_name, beer_count } ]` |
+| Status | Method | Path | Auth | Summary | Query params | Success response |
+|--------|--------|------|------|---------|--------------|-----------------|
+| ✅ | `GET` | `/leaderboard` | 🔑 | Non-admin users ranked by beer count for a year | `year?` (defaults to current year) | `200 [ { display_name, beer_count } ]` |
+
+Admin users are excluded. Users with zero beers for the year are still listed with `beer_count = 0`.
 
 ---
 
@@ -114,20 +110,20 @@ All require `🔑 JWT`.
 
 All require `🔑 JWT`.
 
-`GET /calendar` returns all 24 entries using the unlock-aware locked/unlocked schema (locked entries omit `content`, `image_url`, and `beer`).
+`GET /calendar` returns all entries for a year using the unlock-aware locked/unlocked schema (locked entries omit `title`, `content`, `image_url`, and `beer`).
 
-`GET /calendar/{day}` is **day-gated**: if `unlock_date > now`, the endpoint returns `403` outright — it does **not** return the locked schema. This prevents clients from probing individual days to infer beer information before the door is meant to open.
+`GET /calendar/{year}/{day}` is **day-gated**: if `unlock_date > now`, the endpoint returns `403` outright — it does **not** return the locked schema. This prevents clients from probing individual days to infer beer information before the door is meant to open.
 
 | Status | Method | Path | Auth | Summary | Query params | Success response |
 |--------|--------|------|------|---------|--------------|-----------------|
-| ❌ | `GET` | `/calendar` | 🔑 | List all 24 entries for a year (locked/unlocked schema) | `year?` (defaults to current UTC year) | `200 [ CalendarEntryOut ]` |
-| ❌ | `GET` | `/calendar/years` | 🔑 | List available years (descending) | — | `200 [ { year } ]` |
-| ❌ | `GET` | `/calendar/{day}` | 🔑 | Single unlocked entry only — blocked if still locked | `year` (**required**) | `200 CalendarEntryOut` |
+| ✅ | `GET` | `/calendar/years` | 🔑 | List available years (ascending) | — | `200 [ { year } ]` |
+| ✅ | `GET` | `/calendar` | 🔑 | List all entries for a year (locked/unlocked schema) | `year?` (defaults to current year) | `200 [ CalendarEntryOut ]` |
+| ✅ | `GET` | `/calendar/{year}/{day}` | 🔑 | Single unlocked entry only — blocked if still locked | — | `200 CalendarEntryOut` |
 
-> **Note:** `/calendar/years` must be registered **before** `/calendar/{day}` in the router to avoid `years` being matched as a day value.
+> **Note:** `/calendar/years` is registered **before** `/calendar/{year}/{day}` in the router so `years` is never matched as a year value.
 
-### `CalendarEntryOut` — locked state (list only)
-`id`, `year`, `day`, `unlock_date`, `title`, `is_locked: true`
+### `CalendarEntryOut` — locked state
+`id`, `year`, `day`, `unlock_date`, `is_locked: true` (`title`, `content`, `image_url`, `beer` are `null`)
 
 ### `CalendarEntryOut` — unlocked state
 `id`, `year`, `day`, `unlock_date`, `title`, `content`, `image_url`, `is_locked: false`,
@@ -137,9 +133,8 @@ All require `🔑 JWT`.
 
 | Endpoint | Code | Detail |
 |----------|------|--------|
-| `GET /calendar/{day}` | `422` | `year` query parameter is missing |
-| `GET /calendar/{day}` | `403` | Entry exists but `unlock_date > now` (door not yet open) |
-| `GET /calendar/{day}` | `404` | Day/year combination not found |
+| `GET /calendar/{year}/{day}` | `403` | `"This day is not yet unlocked."` (`unlock_date > now`) |
+| `GET /calendar/{year}/{day}` | `404` | `"Calendar day not found."` |
 
 ---
 
@@ -147,78 +142,87 @@ All require `🔑 JWT`.
 
 All require `🛡️ JWT with role = admin`.
 
-### Users
+### Users — `/admin/users`
 
 | Status | Method | Path | Summary | Request body | Success response |
 |--------|--------|------|---------|--------------|-----------------|
-| ❌ | `GET` | `/admin/users` | List all users | — | `200 [ UserOut ]` |
-| ❌ | `POST` | `/admin/users` | Create a new user | `UserCreate` | `201 UserOut` |
-| ❌ | `PUT` | `/admin/users/{user_id}` | Update user fields | `UserUpdate` (all fields optional) | `200 UserOut` |
-| ❌ | `POST` | `/admin/users/{user_id}/activate` | Set `is_active = true` | — | `200 UserOut` |
-| ❌ | `POST` | `/admin/users/{user_id}/deactivate` | Set `is_active = false` | — | `200 UserOut` |
+| ✅ | `GET` | `/admin/users` | List all users | — | `200 [ AdminUserOut ]` |
+| ✅ | `POST` | `/admin/users` | Create a new user | `UserCreate` | `201 AdminUserOut` |
+| ✅ | `PUT` | `/admin/users/{user_id}` | Update user fields | `UserUpdate` (all fields optional) | `200 AdminUserOut` |
+| ✅ | `POST` | `/admin/users/{user_id}/activate` | Set `is_active = true` | — | `200 AdminUserOut` |
+| ✅ | `POST` | `/admin/users/{user_id}/deactivate` | Set `is_active = false` | — | `200 AdminUserOut` |
 
 #### `UserCreate` fields
-`email`, `display_name`, `role?`, `is_active?`
+`email`, `display_name`, `role?` (default `user`), `is_active?` (default `true`)
 
-#### `UserOut` fields
+#### `UserUpdate` fields
+`display_name?`, `role?`, `is_active?`
+
+#### `AdminUserOut` fields
 `id`, `email`, `display_name`, `role`, `is_active`, `created_at`, `updated_at`
 
 #### Error responses (admin users)
 
 | Endpoint | Code | Detail |
 |----------|------|--------|
-| `POST /admin/users` | `409` | Email already exists |
+| `POST /admin/users` | `409` | `"User with this email already exists."` |
+| `PUT /admin/users/{user_id}` | `404` | `"User not found."` |
+| `POST /admin/users/{user_id}/activate` | `404` | `"User not found."` |
+| `POST /admin/users/{user_id}/deactivate` | `404` | `"User not found."` |
 
-### Beers
+### Beers — `/admin/beers`
 
-| Status | Method | Path | Summary | Success response |
-|--------|--------|------|---------|-----------------|
-| ❌ | `GET` | `/admin/beers` | All beer entries (decrypted) with owner info | `200 [ AdminBeerEntryOut ]` |
+| Status | Method | Path | Summary | Query params | Success response |
+|--------|--------|------|---------|--------------|-----------------|
+| ✅ | `GET` | `/admin/beers` | All beer entries (decrypted) with owner info | `year?` | `200 [ AdminBeerEntryOut ]` |
 
 #### `AdminBeerEntryOut` fields
-`id`, `user_id`, `display_name` (owner), `beer_name`, `brewery`, `untappd_url`, `comment`, `bought_from`, `bought_at`, `created_at`, `updated_at`
+`id`, `user_id`, `display_name` (owner), `year`, `beer_name`, `brewery`, `untappd_url`, `comment`, `bought_from`, `bought_at`, `created_at`, `updated_at`
 
-### Calendar
+### Calendar — `/admin/calendar`
 
-| Status | Method | Path | Summary | Request body / Query params | Success response |
-|--------|--------|------|---------|----------------------------|-----------------|
-| ❌ | `GET` | `/admin/calendar` | All 24 entries (full content, unlock ignored) | `year?` (defaults to current UTC year) | `200 [ AdminCalendarEntryOut ]` |
-| ❌ | `POST` | `/admin/calendar` | Create a calendar entry | `CalendarEntryCreate` | `201 AdminCalendarEntryOut` |
-| ❌ | `PUT` | `/admin/calendar/{entry_id}` | Update calendar entry (not beer assignment) | `CalendarEntryUpdate` (all fields optional) | `200 AdminCalendarEntryOut` |
-| ❌ | `DELETE` | `/admin/calendar/{entry_id}` | Delete calendar entry (beer entry unaffected) | — | `204 No Content` |
-| ❌ | `PUT` | `/admin/calendar/{entry_id}/beer` | Assign a beer to this calendar day | `{ beer_entry_id }` | `200 AdminCalendarEntryOut` |
-| ❌ | `DELETE` | `/admin/calendar/{entry_id}/beer` | Unassign beer from this calendar day | — | `200 AdminCalendarEntryOut` |
+The admin calendar is managed **per year and per day**. There is no per-entry create/update/delete endpoint: creating a year generates all 24 days, and editing a day's title/content is not currently exposed over the API.
 
-#### `CalendarEntryCreate` fields
-`year`, `day`, `unlock_date`, `title`, `content`, `image_url?`
+| Status | Method | Path | Summary | Request body | Success response |
+|--------|--------|------|---------|--------------|-----------------|
+| ✅ | `GET` | `/admin/calendar` | All entries for a year (full content, unlock ignored) | `year?` (defaults to current year) | `200 [ AdminCalendarEntryOut ]` |
+| ✅ | `PUT` | `/admin/calendar/{year}` | Create the 24 calendar days for a year (skips existing days) | — | `204 No Content` |
+| ✅ | `DELETE` | `/admin/calendar/{year}` | Delete all days for a year | — | `204 No Content` |
+| ✅ | `PUT` | `/admin/calendar/{year}/{day}/beer` | Assign a beer to this calendar day | `{ beer_entry_id }` | `200 AdminCalendarEntryOut` |
+| ✅ | `DELETE` | `/admin/calendar/{year}/{day}/beer` | Unassign beer from this calendar day | — | `200 AdminCalendarEntryOut` |
 
 #### `AdminCalendarEntryOut` fields
-`id`, `year`, `day`, `unlock_date`, `title`, `content`, `image_url`, `beer_entry_id`,
+`year`, `day`, `unlock_date`, `title`, `content`, `image_url`, `beer_entry_id`,
 `beer?: { id, user_id, display_name, beer_name, brewery, untappd_url, comment, bought_from, bought_at, ratings: [UserRatingOut] }`
 
 #### Error responses (admin calendar)
 
 | Endpoint | Code | Detail |
 |----------|------|--------|
-| `POST /admin/calendar` | `409` | Day already exists for that year |
-| `PUT /admin/calendar/{entry_id}/beer` | `404` | Beer entry not found |
-| `PUT /admin/calendar/{entry_id}/beer` | `409` | Beer already assigned to another day |
+| `DELETE /admin/calendar/{year}` | `409` | `"Cannot delete calendar year because at least one day has an assigned beer."` |
+| `PUT /admin/calendar/{year}/{day}/beer` | `404` | `"Calendar entry not found."` |
+| `PUT /admin/calendar/{year}/{day}/beer` | `404` | `"Beer entry not found."` |
+| `PUT /admin/calendar/{year}/{day}/beer` | `409` | `"Beer entry belongs to a different calendar year."` |
+| `PUT /admin/calendar/{year}/{day}/beer` | `409` | `"Beer entry is already assigned to a calendar day."` |
+| `DELETE /admin/calendar/{year}/{day}/beer` | `404` | `"Calendar entry not found."` |
 
 ---
 
 ## Summary — counts by status
 
+All routes are implemented.
+
 | Status | Count |
 |--------|-------|
-| ✅ Implemented | 1 (`GET /health`) |
-| ❌ Not implemented | 27 |
-| **Total** | **28** |
+| ✅ Implemented | 24 |
+| ❌ Not implemented | 0 |
+| **Total** | **24** |
 
 ---
 
 ## FastAPI Dependencies
 
-Defined in `backend/auth/dependencies.py`.
+Defined in `backend/brobier/auth/dependencies.py`.
 
 ### `get_current_user(request: Request) -> User` ✅
 Reads the `Authorization: Bearer <token>` header, decodes and verifies the JWT, loads the matching active `User` from the database, and returns it.
@@ -226,11 +230,11 @@ Reads the `Authorization: Bearer <token>` header, decodes and verifies the JWT, 
 | Condition | Response |
 |-----------|----------|
 | Header absent or not `Bearer …` | `401 Missing or invalid Authorization header.` |
-| JWT malformed or expired | `401 <jwt error message>` |
+| JWT malformed or expired | `401 JWT token is invalid` / `401 JWT token has expired` |
 | JWT has no `sub` claim | `401 Invalid token payload.` |
 | User not found or `is_active = false` | `401 User not found or inactive.` |
 
-**Used on:** all `🔑` routes.
+**Used on:** all `🔑` routes (registered on the `/beers` and `/calendar` routers).
 
 ---
 
@@ -242,11 +246,11 @@ Wraps `get_current_user` and additionally enforces `role == "admin"`.
 | Not authenticated | delegates to `get_current_user` → `401` |
 | Authenticated but `role != "admin"` | `403 Admin access required.` |
 
-**Used on:** all `🛡️` routes (every `/admin/*` endpoint).
+**Used on:** all `🛡️` routes (every `/admin/*` router).
 
 ---
 
-### `get_refresh_token_raw(request: Request) -> str` ❌
+### `get_refresh_token_raw(request: Request) -> str` ✅
 Reads the raw value of the `brobier_refresh` HTTP-only cookie from the request.
 
 | Condition | Response |
@@ -257,35 +261,17 @@ Reads the raw value of the `brobier_refresh` HTTP-only cookie from the request.
 
 ---
 
-### `require_owns_beer(beer_id, current_user) -> BeerEntry` ❌
-Loads the `BeerEntry` by `beer_id` and asserts `beer.user_id == current_user.id`.
-
-| Condition | Response |
-|-----------|----------|
-| Beer not found | `404 Beer entry not found.` |
-| User does not own the beer | `403 Not the owner.` |
-
-**Used on:** `PUT /beers/{beer_id}`, `DELETE /beers/{beer_id}`.
-
----
-
-### `require_beer_not_assigned(beer: BeerEntry) -> BeerEntry` ❌
-Asserts the beer entry is not currently linked to any `CalendarEntry`.
-
-| Condition | Response |
-|-----------|----------|
-| Beer is assigned to a calendar entry | `409 Beer is assigned to a calendar entry.` |
-
-**Used on:** `PUT /beers/{beer_id}`, `DELETE /beers/{beer_id}` (chained after `require_owns_beer`).
-
----
+> **Ownership & assignment checks** are enforced inside the service layer, not as
+> FastAPI dependencies. Beer update/delete queries filter by `user_id`, and the
+> beers service blocks deleting a beer that is assigned to a calendar day or that
+> already has a rating.
 
 ## Router Structure
 
-Defined in `backend/api/routes/`. Each module creates an `APIRouter` and is included in `main.py`.
+Defined in `backend/brobier/api/routes/`. Each module creates an `APIRouter` and is included in `main.py`.
 
 ```
-backend/
+backend/brobier/
 └── api/
     └── routes/
         ├── __init__.py
@@ -303,19 +289,24 @@ backend/
 ### Registration in `main.py`
 
 ```python
-app.include_router(auth_router,        prefix="/auth")
-app.include_router(beers_router,       prefix="/beers",       dependencies=[Depends(get_current_user)])
-app.include_router(calendar_router,    prefix="/calendar",    dependencies=[Depends(get_current_user)])
-app.include_router(leaderboard_router, prefix="/leaderboard", dependencies=[Depends(get_current_user)])
-app.include_router(admin_router,       prefix="/admin",       dependencies=[Depends(require_admin)])
+app.include_router(auth.router,           prefix='/auth')
+app.include_router(leaderboard.router,    prefix='/leaderboard')
+app.include_router(beers.router,          prefix='/beers',         dependencies=[Depends(get_current_user)])
+app.include_router(calendar.router,       prefix='/calendar',      dependencies=[Depends(get_current_user)])
+app.include_router(admin_users.router,    prefix='/admin/users',   dependencies=[Depends(require_admin)])
+app.include_router(admin_beers.router,    prefix='/admin/beers',   dependencies=[Depends(require_admin)])
+app.include_router(admin_calendar.router, prefix='/admin/calendar', dependencies=[Depends(require_admin)])
 ```
+
+> Note: the `/leaderboard` router is currently registered **without** a router-level
+> auth dependency, unlike `/beers` and `/calendar`.
 
 > `POST /auth/refresh` and `POST /auth/logout` handle cookie auth inside the route handler via `get_refresh_token_raw` — they are **not** covered by the router-level `get_current_user` dependency.
 
 ### Route ordering within `calendar.py`
 
 ```python
-router.get("/years")   # must be first — avoids "years" matching {day}
-router.get("/{day}")
-router.get("/")
+router.get('/years')          # must be first — avoids "years" matching {year}
+router.get('')                # list for a year
+router.get('/{year}/{day}')   # single day
 ```
