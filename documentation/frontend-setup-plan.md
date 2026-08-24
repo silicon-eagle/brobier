@@ -14,7 +14,7 @@
 
 * React 19 (19.2.7+)
 * Vite 8 (8.1.x)
-* TypeScript 5
+* TypeScript 6
 * Tailwind CSS v4.3 (via the `@tailwindcss/vite` plugin)
 * React Router v8 (8.1.x) — package `react-router` (`react-router-dom` is legacy/removed). Declarative routing APIs such as `BrowserRouter`, `Routes`, and `Route` come from `react-router`.
 * Vitest 4 + React Testing Library
